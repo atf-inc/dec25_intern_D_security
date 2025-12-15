@@ -1,9 +1,7 @@
-# app/config.py
 """
 Configuration management with GCP Secret Manager
 Loads secrets and configuration for ATF Sentinel
 Author: ANIRUDH S J
-Date: DECEMBER 14, 2025
 """
 
 import os

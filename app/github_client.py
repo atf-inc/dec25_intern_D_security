@@ -4,6 +4,7 @@ Handles all interactions with GitHub API including:
 - Fetching PR files and diffs
 - Posting comments
 - Setting commit status
+Author: ANIRUDH S J
 """
 from github import Github
 from github.GithubException import GithubException
@@ -44,9 +45,29 @@ class GitHubClient:
         except GithubException as e:
             logger.error(f"❌ Failed to authenticate with GitHub: {e}")
             raise
+    
+    def get_repo(self, repo_name: str):
+        """
+        Get repository object
+        
+        Args:
+            repo_name: Full repo name (e.g., 'octocat/Hello-World')
+            
+        Returns:
+            Repository object from PyGithub
+            
+        Raises:
+            GithubException: If repo doesn't exist or no access
+        """
+        try:
+            repo = self.gh.get_repo(repo_name)
+            logger.info(f"✅ Accessed repository: {repo_name}")
+            return repo
+        except GithubException as e:
+            logger.error(f"❌ Failed to access repo {repo_name}: {e}")
+            raise
 
 
-# Simple test to verify the module can be imported
 if __name__ == "__main__":
     print("✅ GitHub client module loaded successfully")
-    print("Note: Authentication test requires a valid token")
+    print("Use test_commit2_1.py to test repository access")

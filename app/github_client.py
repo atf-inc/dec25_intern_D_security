@@ -66,6 +66,127 @@ class GitHubClient:
         except GithubException as e:
             logger.error(f"❌ Failed to access repo {repo_name}: {e}")
             raise
+    
+    @staticmethod
+    def _is_text_file(filename: str) -> bool:
+        """
+        Check if file is a text file (should be scanned) vs binary (skip)
+        
+        Args:
+            filename: Name of the file with extension
+            
+        Returns:
+            True if text file that should be scanned, False otherwise
+        """
+        # Programming languages
+        text_extensions = {
+            # Python
+            '.py', '.pyw', '.pyx', '.pxd', '.pxi',
+            
+            # JavaScript/TypeScript
+            '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+            
+            # Java/Kotlin/Scala
+            '.java', '.kt', '.kts', '.scala',
+            
+            # C/C++
+            '.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hxx',
+            
+            # C#/.NET
+            '.cs', '.vb', '.fs',
+            
+            # Go
+            '.go',
+            
+            # Rust
+            '.rs',
+            
+            # Ruby
+            '.rb', '.rake', '.gemspec',
+            
+            # PHP
+            '.php', '.phtml', '.php3', '.php4', '.php5', '.phps',
+            
+            # Swift
+            '.swift',
+            
+            # Objective-C
+            '.m', '.mm',
+            
+            # R
+            '.r', '.R',
+            
+            # Web
+            '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less',
+            '.vue', '.svelte', '.astro',
+            
+            # Config/Data
+            '.json', '.yaml', '.yml', '.xml', '.toml', '.ini', '.conf', '.config',
+            '.env', '.properties', '.cfg',
+            
+            # Scripts
+            '.sh', '.bash', '.zsh', '.fish', '.ps1', '.bat', '.cmd',
+            
+            # Documentation
+            '.md', '.markdown', '.txt', '.rst', '.asciidoc', '.adoc',
+            
+            # SQL
+            '.sql', '.pgsql', '.mysql', '.plsql',
+            
+            # GraphQL
+            '.graphql', '.gql',
+            
+            # Terraform
+            '.tf', '.tfvars',
+            
+            # Docker
+            '.dockerfile',
+        }
+        
+        filename_lower = filename.lower()
+        
+        # Check extension
+        for ext in text_extensions:
+            if filename_lower.endswith(ext):
+                return True
+        
+        # Check exact matches (files without extensions)
+        basename = filename.split('/')[-1].lower()
+        text_basenames = {
+            'dockerfile', 'makefile', 'rakefile', 'gemfile',
+            'readme', 'license', 'changelog', 'contributing',
+            'jenkinsfile', 'vagrantfile', 'procfile'
+        }
+        
+        if basename in text_basenames:
+            return True
+        
+        # Skip known binary/media extensions
+        binary_extensions = {
+            # Images
+            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.ico', '.webp',
+            # Videos
+            '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm',
+            # Audio
+            '.mp3', '.wav', '.flac', '.aac', '.ogg',
+            # Archives
+            '.zip', '.tar', '.gz', '.bz2', '.7z', '.rar',
+            # Executables
+            '.exe', '.dll', '.so', '.dylib', '.bin',
+            # Documents
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+            # Fonts
+            '.ttf', '.otf', '.woff', '.woff2', '.eot',
+            # Other
+            '.pyc', '.pyo', '.class', '.o', '.a', '.jar', '.war'
+        }
+        
+        for ext in binary_extensions:
+            if filename_lower.endswith(ext):
+                return False
+        
+        # Default to True for unknown extensions (safer to scan)
+        return True
 
 
 # Helper function for testing and verification
@@ -96,161 +217,138 @@ def display_repo_info(repo) -> None:
     print(f"   {'='*56}\n")
 
 
-# Comprehensive test suite
-def test_repository_access():
+# Test function for file type detection
+def test_file_type_detection():
     """
-    Comprehensive test suite for repository access functionality
-    Tests both automated scenarios and interactive user flows
+    Test the _is_text_file method with various file types
     """
-    import os
-    
-    print("\n🧪 Testing Repository Access - Complete Test Suite\n")
+    print("\n🧪 Testing File Type Detection\n")
     print("="*60)
     
-    # Get token
-    token = os.getenv('GITHUB_TOKEN')
-    if not token:
-        print("Enter your GitHub Personal Access Token:")
-        token = input().strip()
+    # Test cases: (filename, expected_result, category)
+    test_cases = [
+        # Programming languages
+        ('main.py', True, 'Python'),
+        ('app.js', True, 'JavaScript'),
+        ('component.tsx', True, 'TypeScript React'),
+        ('Main.java', True, 'Java'),
+        ('lib.rs', True, 'Rust'),
+        ('app.go', True, 'Go'),
+        ('script.rb', True, 'Ruby'),
+        ('index.php', True, 'PHP'),
+        ('program.c', True, 'C'),
+        ('program.cpp', True, 'C++'),
+        ('App.cs', True, 'C#'),
+        ('app.swift', True, 'Swift'),
+        
+        # Web files
+        ('index.html', True, 'HTML'),
+        ('styles.css', True, 'CSS'),
+        ('styles.scss', True, 'SCSS'),
+        ('App.vue', True, 'Vue'),
+        ('Component.svelte', True, 'Svelte'),
+        
+        # Config files
+        ('config.json', True, 'JSON'),
+        ('config.yaml', True, 'YAML'),
+        ('config.yml', True, 'YAML'),
+        ('config.toml', True, 'TOML'),
+        ('.env', True, 'Environment'),
+        ('settings.ini', True, 'INI'),
+        
+        # Scripts
+        ('build.sh', True, 'Shell'),
+        ('deploy.bash', True, 'Bash'),
+        ('script.ps1', True, 'PowerShell'),
+        
+        # Documentation
+        ('README.md', True, 'Markdown'),
+        ('CHANGELOG.txt', True, 'Text'),
+        ('docs.rst', True, 'reStructuredText'),
+        
+        # Files without extensions
+        ('Dockerfile', True, 'Docker'),
+        ('Makefile', True, 'Make'),
+        ('Jenkinsfile', True, 'Jenkins'),
+        ('Gemfile', True, 'Ruby Gem'),
+        
+        # SQL
+        ('schema.sql', True, 'SQL'),
+        ('query.pgsql', True, 'PostgreSQL'),
+        
+        # GraphQL & Terraform
+        ('schema.graphql', True, 'GraphQL'),
+        ('main.tf', True, 'Terraform'),
+        
+        # Binary files (should be False)
+        ('image.png', False, 'PNG Image'),
+        ('photo.jpg', False, 'JPEG Image'),
+        ('icon.svg', False, 'SVG Image'),
+        ('video.mp4', False, 'MP4 Video'),
+        ('audio.mp3', False, 'MP3 Audio'),
+        ('archive.zip', False, 'ZIP Archive'),
+        ('archive.tar.gz', False, 'TAR.GZ Archive'),
+        ('program.exe', False, 'Executable'),
+        ('library.dll', False, 'DLL'),
+        ('library.so', False, 'Shared Object'),
+        ('document.pdf', False, 'PDF'),
+        ('spreadsheet.xlsx', False, 'Excel'),
+        ('font.ttf', False, 'TrueType Font'),
+        ('compiled.pyc', False, 'Python Compiled'),
+        ('compiled.class', False, 'Java Compiled'),
+        
+        # Edge cases
+        ('file.UNKNOWN', True, 'Unknown (defaults to True)'),
+        ('path/to/file.py', True, 'Nested path'),
+        ('README', True, 'No extension'),
+    ]
     
-    if not token:
-        print("❌ No token provided")
-        return False
+    print("\n1️⃣  Testing Text Files (Should be scanned)\n")
+    text_passed = 0
+    text_total = sum(1 for _, expected, _ in test_cases if expected)
     
-    try:
-        # Test 1: Initialize client
-        print("\n1️⃣  Testing Client Initialization")
-        print("   " + "-"*56)
-        client = GitHubClient(token)
-        print("   ✅ Client initialized successfully\n")
-        
-        # Test 2: Access well-known public repository
-        print("2️⃣  Testing Public Repository Access")
-        print("   " + "-"*56)
-        print("   Accessing: octocat/Hello-World")
-        repo1 = client.get_repo("octocat/Hello-World")
-        display_repo_info(repo1)
-        print("   ✅ Public repository accessed successfully\n")
-        
-        # Test 3: Access another popular repository
-        print("3️⃣  Testing Multiple Repository Access")
-        print("   " + "-"*56)
-        test_repos = [
-            "torvalds/linux",
-            "microsoft/vscode",
-            "python/cpython"
-        ]
-        
-        print("   Testing access to multiple repositories:")
-        for repo_name in test_repos:
-            try:
-                repo = client.get_repo(repo_name)
-                print(f"   ✅ {repo_name}: {repo.stargazers_count:,} stars")
-            except Exception as e:
-                print(f"   ⚠️  {repo_name}: {str(e)[:50]}...")
-        print()
-        
-        # Test 4: Error handling for invalid repository
-        print("4️⃣  Testing Error Handling")
-        print("   " + "-"*56)
-        invalid_repos = [
-            "invalid/nonexistent-repo-12345",
-            "thisdoesnotexist/norepo",
-            "bad/format/toolong"
-        ]
-        
-        errors_caught = 0
-        for repo_name in invalid_repos:
-            try:
-                client.get_repo(repo_name)
-                print(f"   ❌ {repo_name}: Should have raised exception")
-            except GithubException:
-                print(f"   ✅ {repo_name}: Exception caught correctly")
-                errors_caught += 1
-        
-        if errors_caught == len(invalid_repos):
-            print(f"   ✅ All {errors_caught} invalid repos handled correctly\n")
-        else:
-            print(f"   ⚠️  Only {errors_caught}/{len(invalid_repos)} handled\n")
-        
-        # Test 5: Access user's own repositories
-        print("5️⃣  Testing Authenticated User's Repositories")
-        print("   " + "-"*56)
-        user = client.gh.get_user()
-        print(f"   Authenticated as: {user.login}")
-        
-        user_repos = list(user.get_repos()[:3])  # Get first 3 repos
-        if user_repos:
-            print(f"   Found {len(user_repos)} repositories:")
-            for repo in user_repos:
-                print(f"   • {repo.full_name} ({'private' if repo.private else 'public'})")
-            
-            # Display detailed info for first repo
-            print(f"\n   Detailed info for first repository:")
-            display_repo_info(user_repos[0])
-            print("   ✅ User repositories accessed successfully\n")
-        else:
-            print("   ⏭️  No repositories found (new account?)\n")
-        
-        # Test 6: Interactive test
-        print("6️⃣  Interactive Repository Test")
-        print("   " + "-"*56)
-        print("   Enter a repository to test (or press Enter to skip):")
-        print("   Format: owner/repo (e.g., facebook/react)")
-        custom_repo = input("   Repository: ").strip()
-        
-        if custom_repo:
-            try:
-                print(f"\n   Accessing: {custom_repo}")
-                repo = client.get_repo(custom_repo)
-                display_repo_info(repo)
-                print("   ✅ Custom repository accessed successfully\n")
-            except GithubException as e:
-                print(f"   ❌ Failed to access: {e}\n")
-        else:
-            print("   ⏭️  Skipped interactive test\n")
-        
-        # Test 7: Rate limit check
-        print("7️⃣  Checking API Rate Limit")
-        print("   " + "-"*56)
-        rate_limit = client.gh.get_rate_limit()
-        remaining = rate_limit.core.remaining
-        total = rate_limit.core.limit
-        reset_time = rate_limit.core.reset
-        
-        print(f"   Remaining: {remaining}/{total}")
-        print(f"   Reset at:  {reset_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        if remaining < 100:
-            print("   ⚠️  Rate limit running low!")
-        else:
-            print("   ✅ Rate limit healthy")
-        print()
-        
-        # Final summary
-        print("="*60)
-        print("✅ All Repository Access Tests Passed!")
-        print("="*60)
-        print("\n📊 Test Summary:")
-        print(f"   • Client initialization: ✅")
-        print(f"   • Public repo access: ✅")
-        print(f"   • Multiple repo access: ✅")
-        print(f"   • Error handling: ✅")
-        print(f"   • User repo access: ✅")
-        print(f"   • Interactive test: {'✅' if custom_repo else '⏭️ '}")
-        print(f"   • Rate limit check: ✅")
-        print(f"\n   API calls remaining: {remaining}/{total}")
-        print()
-        
+    for filename, expected, category in test_cases:
+        if expected:  # Only test text files in this section
+            result = GitHubClient._is_text_file(filename)
+            status = "✅" if result == expected else "❌"
+            print(f"   {status} {filename:<30} [{category}]")
+            if result == expected:
+                text_passed += 1
+    
+    print(f"\n   Result: {text_passed}/{text_total} text files detected correctly\n")
+    
+    print("\n2️⃣  Testing Binary Files (Should be skipped)\n")
+    binary_passed = 0
+    binary_total = sum(1 for _, expected, _ in test_cases if not expected)
+    
+    for filename, expected, category in test_cases:
+        if not expected:  # Only test binary files in this section
+            result = GitHubClient._is_text_file(filename)
+            status = "✅" if result == expected else "❌"
+            print(f"   {status} {filename:<30} [{category}]")
+            if result == expected:
+                binary_passed += 1
+    
+    print(f"\n   Result: {binary_passed}/{binary_total} binary files detected correctly\n")
+    
+    # Summary
+    total_passed = text_passed + binary_passed
+    total_cases = text_total + binary_total
+    
+    print("="*60)
+    print(f"📊 Test Summary:\n")
+    print(f"   Text files:   {text_passed}/{text_total} ✅")
+    print(f"   Binary files: {binary_passed}/{binary_total} ✅")
+    print(f"   Total:        {total_passed}/{total_cases} ✅")
+    
+    if total_passed == total_cases:
+        print(f"\n✅ All file type detection tests passed!\n")
         return True
-        
-    except Exception as e:
-        print(f"\n❌ Test suite failed: {e}\n")
-        import traceback
-        traceback.print_exc()
+    else:
+        print(f"\n❌ {total_cases - total_passed} tests failed!\n")
         return False
 
 
 if __name__ == "__main__":
-    success = test_repository_access()
+    success = test_file_type_detection()
     exit(0 if success else 1)

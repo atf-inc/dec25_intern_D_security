@@ -8,6 +8,7 @@ Author: ANIRUDH S J
 """
 from github import Github
 from github.GithubException import GithubException
+from typing import List, Dict, Optional
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -65,6 +66,75 @@ class GitHubClient:
             return repo
         except GithubException as e:
             logger.error(f"❌ Failed to access repo {repo_name}: {e}")
+            raise
+    
+    def get_pr_files(self, repo_name: str, pr_number: int) -> List[Dict]:
+        """
+        Get list of files changed in a Pull Request with their diffs
+        
+        This is the CRITICAL function that gets the actual code changes to scan!
+        
+        Args:
+            repo_name: Full repo name (e.g., 'myorg/myrepo')
+            pr_number: Pull request number
+            
+        Returns:
+            List of dictionaries containing file information:
+            [
+                {
+                    'filename': 'path/to/file.py',
+                    'status': 'added' | 'modified' | 'removed' | 'renamed',
+                    'additions': 10,
+                    'deletions': 5,
+                    'changes': 15,
+                    'patch': '@@ -1,3 +1,4 @@ ...',  # The actual diff!
+                    'blob_url': 'https://github.com/...',
+                    'raw_url': 'https://raw.githubusercontent.com/...'
+                },
+                ...
+            ]
+            
+        Raises:
+            GithubException: If PR doesn't exist or no access
+        """
+        try:
+            repo = self.get_repo(repo_name)
+            pr = repo.get_pull(pr_number)
+            
+            logger.info(f"📁 Fetching files for PR #{pr_number}: {pr.title}")
+            
+            files_changed = []
+            total_files = 0
+            skipped_files = 0
+            
+            for file in pr.get_files():
+                total_files += 1
+                
+                # Only process text files (skip binaries, images, etc.)
+                if self._is_text_file(file.filename):
+                    file_info = {
+                        'filename': file.filename,
+                        'status': file.status,
+                        'additions': file.additions,
+                        'deletions': file.deletions,
+                        'changes': file.changes,
+                        'patch': file.patch,  # This is the diff!
+                        'blob_url': file.blob_url,
+                        'raw_url': file.raw_url
+                    }
+                    files_changed.append(file_info)
+                    logger.debug(f"   ✅ {file.filename} ({file.status})")
+                else:
+                    skipped_files += 1
+                    logger.debug(f"   ⏭️  Skipping binary: {file.filename}")
+            
+            logger.info(f"✅ Found {len(files_changed)} text files to scan "
+                       f"({skipped_files} binaries skipped out of {total_files} total)")
+            
+            return files_changed
+            
+        except GithubException as e:
+            logger.error(f"❌ Failed to fetch PR files: {e}")
             raise
     
     @staticmethod
@@ -217,138 +287,167 @@ def display_repo_info(repo) -> None:
     print(f"   {'='*56}\n")
 
 
-# Test function for file type detection
-def test_file_type_detection():
+# Test function for PR file fetching
+def test_pr_file_fetching():
     """
-    Test the _is_text_file method with various file types
+    Test PR file fetching functionality
     """
-    print("\n🧪 Testing File Type Detection\n")
+    import os
+    
+    print("\n🧪 Testing PR File Fetching\n")
     print("="*60)
     
-    # Test cases: (filename, expected_result, category)
-    test_cases = [
-        # Programming languages
-        ('main.py', True, 'Python'),
-        ('app.js', True, 'JavaScript'),
-        ('component.tsx', True, 'TypeScript React'),
-        ('Main.java', True, 'Java'),
-        ('lib.rs', True, 'Rust'),
-        ('app.go', True, 'Go'),
-        ('script.rb', True, 'Ruby'),
-        ('index.php', True, 'PHP'),
-        ('program.c', True, 'C'),
-        ('program.cpp', True, 'C++'),
-        ('App.cs', True, 'C#'),
-        ('app.swift', True, 'Swift'),
-        
-        # Web files
-        ('index.html', True, 'HTML'),
-        ('styles.css', True, 'CSS'),
-        ('styles.scss', True, 'SCSS'),
-        ('App.vue', True, 'Vue'),
-        ('Component.svelte', True, 'Svelte'),
-        
-        # Config files
-        ('config.json', True, 'JSON'),
-        ('config.yaml', True, 'YAML'),
-        ('config.yml', True, 'YAML'),
-        ('config.toml', True, 'TOML'),
-        ('.env', True, 'Environment'),
-        ('settings.ini', True, 'INI'),
-        
-        # Scripts
-        ('build.sh', True, 'Shell'),
-        ('deploy.bash', True, 'Bash'),
-        ('script.ps1', True, 'PowerShell'),
-        
-        # Documentation
-        ('README.md', True, 'Markdown'),
-        ('CHANGELOG.txt', True, 'Text'),
-        ('docs.rst', True, 'reStructuredText'),
-        
-        # Files without extensions
-        ('Dockerfile', True, 'Docker'),
-        ('Makefile', True, 'Make'),
-        ('Jenkinsfile', True, 'Jenkins'),
-        ('Gemfile', True, 'Ruby Gem'),
-        
-        # SQL
-        ('schema.sql', True, 'SQL'),
-        ('query.pgsql', True, 'PostgreSQL'),
-        
-        # GraphQL & Terraform
-        ('schema.graphql', True, 'GraphQL'),
-        ('main.tf', True, 'Terraform'),
-        
-        # Binary files (should be False)
-        ('image.png', False, 'PNG Image'),
-        ('photo.jpg', False, 'JPEG Image'),
-        ('icon.svg', False, 'SVG Image'),
-        ('video.mp4', False, 'MP4 Video'),
-        ('audio.mp3', False, 'MP3 Audio'),
-        ('archive.zip', False, 'ZIP Archive'),
-        ('archive.tar.gz', False, 'TAR.GZ Archive'),
-        ('program.exe', False, 'Executable'),
-        ('library.dll', False, 'DLL'),
-        ('library.so', False, 'Shared Object'),
-        ('document.pdf', False, 'PDF'),
-        ('spreadsheet.xlsx', False, 'Excel'),
-        ('font.ttf', False, 'TrueType Font'),
-        ('compiled.pyc', False, 'Python Compiled'),
-        ('compiled.class', False, 'Java Compiled'),
-        
-        # Edge cases
-        ('file.UNKNOWN', True, 'Unknown (defaults to True)'),
-        ('path/to/file.py', True, 'Nested path'),
-        ('README', True, 'No extension'),
-    ]
+    # Get token
+    token = os.getenv('GITHUB_TOKEN')
+    if not token:
+        print("Enter your GitHub Personal Access Token:")
+        token = input().strip()
     
-    print("\n1️⃣  Testing Text Files (Should be scanned)\n")
-    text_passed = 0
-    text_total = sum(1 for _, expected, _ in test_cases if expected)
+    if not token:
+        print("❌ No token provided")
+        return False
     
-    for filename, expected, category in test_cases:
-        if expected:  # Only test text files in this section
-            result = GitHubClient._is_text_file(filename)
-            status = "✅" if result == expected else "❌"
-            print(f"   {status} {filename:<30} [{category}]")
-            if result == expected:
-                text_passed += 1
-    
-    print(f"\n   Result: {text_passed}/{text_total} text files detected correctly\n")
-    
-    print("\n2️⃣  Testing Binary Files (Should be skipped)\n")
-    binary_passed = 0
-    binary_total = sum(1 for _, expected, _ in test_cases if not expected)
-    
-    for filename, expected, category in test_cases:
-        if not expected:  # Only test binary files in this section
-            result = GitHubClient._is_text_file(filename)
-            status = "✅" if result == expected else "❌"
-            print(f"   {status} {filename:<30} [{category}]")
-            if result == expected:
-                binary_passed += 1
-    
-    print(f"\n   Result: {binary_passed}/{binary_total} binary files detected correctly\n")
-    
-    # Summary
-    total_passed = text_passed + binary_passed
-    total_cases = text_total + binary_total
-    
-    print("="*60)
-    print(f"📊 Test Summary:\n")
-    print(f"   Text files:   {text_passed}/{text_total} ✅")
-    print(f"   Binary files: {binary_passed}/{binary_total} ✅")
-    print(f"   Total:        {total_passed}/{total_cases} ✅")
-    
-    if total_passed == total_cases:
-        print(f"\n✅ All file type detection tests passed!\n")
+    try:
+        # Initialize client
+        print("\n1️⃣  Initializing GitHub client...")
+        client = GitHubClient(token)
+        print("   ✅ Client initialized\n")
+        
+        # Get PR details from user
+        print("2️⃣  Enter Pull Request details to test:")
+        print("   " + "-"*56)
+        repo_name = input("   Repository (owner/repo): ").strip()
+        
+        if not repo_name:
+            print("\n   Using default: octocat/Hello-World")
+            repo_name = "octocat/Hello-World"
+        
+        pr_number = input("   PR number: ").strip()
+        
+        if not pr_number:
+            print("   ❌ PR number is required")
+            return False
+        
+        pr_number = int(pr_number)
+        print()
+        
+        # Fetch PR files
+        print(f"3️⃣  Fetching files from PR #{pr_number}...")
+        print("   " + "-"*56)
+        files = client.get_pr_files(repo_name, pr_number)
+        
+        if not files:
+            print("   ⚠️  No text files found in this PR")
+            print("   (PR may contain only binary files or be empty)\n")
+            return True
+        
+        print(f"   ✅ Found {len(files)} text files\n")
+        
+        # Display file details
+        print("4️⃣  File Details:")
+        print("   " + "-"*56)
+        
+        for i, file in enumerate(files, 1):
+            status_emoji = {
+                'added': '🆕',
+                'modified': '📝',
+                'removed': '🗑️',
+                'renamed': '🔄'
+            }.get(file['status'], '📄')
+            
+            print(f"\n   {status_emoji} File #{i}: {file['filename']}")
+            print(f"      Status:    {file['status']}")
+            print(f"      Changes:   +{file['additions']} -{file['deletions']} (~{file['changes']} lines)")
+            print(f"      Blob URL:  {file['blob_url']}")
+            
+            # Show diff preview
+            if file['patch']:
+                patch_lines = file['patch'].split('\n')
+                print(f"      Diff preview ({len(patch_lines)} lines):")
+                # Show first 5 lines of diff
+                for line in patch_lines[:5]:
+                    preview = line[:70] + '...' if len(line) > 70 else line
+                    print(f"         {preview}")
+                if len(patch_lines) > 5:
+                    print(f"         ... ({len(patch_lines) - 5} more lines)")
+            else:
+                print(f"      Diff:      (No patch available)")
+        
+        print()
+        
+        # Statistics
+        print("5️⃣  Statistics:")
+        print("   " + "-"*56)
+        
+        total_additions = sum(f['additions'] for f in files)
+        total_deletions = sum(f['deletions'] for f in files)
+        total_changes = sum(f['changes'] for f in files)
+        
+        status_counts = {}
+        for file in files:
+            status = file['status']
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        print(f"   Total files:     {len(files)}")
+        print(f"   Total additions: +{total_additions}")
+        print(f"   Total deletions: -{total_deletions}")
+        print(f"   Total changes:   ~{total_changes} lines")
+        print(f"\n   By status:")
+        for status, count in sorted(status_counts.items()):
+            emoji = {
+                'added': '🆕',
+                'modified': '📝',
+                'removed': '🗑️',
+                'renamed': '🔄'
+            }.get(status, '📄')
+            print(f"      {emoji} {status.capitalize()}: {count}")
+        
+        print()
+        
+        # Test data structure
+        print("6️⃣  Verifying data structure...")
+        print("   " + "-"*56)
+        
+        required_keys = ['filename', 'status', 'additions', 'deletions', 
+                        'changes', 'patch', 'blob_url', 'raw_url']
+        
+        for file in files:
+            for key in required_keys:
+                assert key in file, f"Missing key: {key}"
+        
+        print(f"   ✅ All {len(required_keys)} required fields present")
+        print(f"   ✅ Data structure validation passed\n")
+        
+        # Summary
+        print("="*60)
+        print("✅ PR File Fetching Test Passed!\n")
+        print("📊 Summary:")
+        print(f"   • Repository:  {repo_name}")
+        print(f"   • PR Number:   #{pr_number}")
+        print(f"   • Files found: {len(files)}")
+        print(f"   • Changes:     +{total_additions} -{total_deletions}")
+        print()
+        
         return True
-    else:
-        print(f"\n❌ {total_cases - total_passed} tests failed!\n")
+        
+    except ValueError as e:
+        print(f"\n❌ Invalid input: {e}\n")
+        return False
+    except GithubException as e:
+        print(f"\n❌ GitHub error: {e}\n")
+        print("   Possible reasons:")
+        print("   • PR doesn't exist")
+        print("   • Repository is private and token lacks access")
+        print("   • Invalid repository name format")
+        print()
+        return False
+    except Exception as e:
+        print(f"\n❌ Test failed: {e}\n")
+        import traceback
+        traceback.print_exc()
         return False
 
 
 if __name__ == "__main__":
-    success = test_file_type_detection()
+    success = test_pr_file_fetching()
     exit(0 if success else 1)

@@ -43,9 +43,9 @@ PII_PATTERNS = {
     "EMAIL_ADDRESS": r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+",
     
     # Credit Card: Matches Visa, MasterCard, Amex, Discover specifically
-    "CREDIT_CARD": r"\b(?:4[0-9]{3}([ -]?)\d{4}\1\d{4}\1\d{4}"  # Visa
-                   r"|5[1-5]\d{2}([ -]?)\d{4}\3\d{4}\3\d{4}"    # MasterCard
-                   r"|3[47]\d{2}([ -]?)\d{6}\5\d{5}"            # Amex
+    "CREDIT_CARD": r"\b(?:4[0-9]{3}([ -]?)\d{4}\1\d{4}\1\d{4}"   # Visa (Group 1)
+                   r"|5[1-5]\d{2}([ -]?)\d{4}\2\d{4}\2\d{4}"     # MasterCard (Group 2)
+                   r"|3[47]\d{2}([ -]?)\d{6}\3\d{5}"             # Amex (Group 3)
                    r")\b",
                    
     "PHONE_NUMBER_JP": r"0\d{1,4}-\d{1,4}-\d{4}",

@@ -8,17 +8,12 @@ logger = logging.getLogger(__name__)
 def run_security_scan(files_list, metadata=None):
     """
     Orchestrates the scan for a LIST of files.
-    
-    Args:
-        files_list (list): The list of dicts returned by Anirudh's get_pr_files()
-                           [{'filename': '...', 'patch': '...'}, ...]
-        metadata (dict): Repo metadata
     """
     if metadata is None:
         metadata = {}
 
     all_regex_issues = []
-    all_ai_issues = []
+    # Removed unused variable to clean up code
     
     combined_diff_for_ai = ""
 
@@ -27,20 +22,18 @@ def run_security_scan(files_list, metadata=None):
         filename = file_data.get('filename', 'unknown')
         patch_text = file_data.get('patch', '')
 
-        # 1. Skip if no patch (e.g. binary files or pure renames)
+        # 1. Skip if no patch
         if not patch_text:
             continue
 
         # 2. Run Regex Scan on this file
         file_issues = scan_diff_for_patterns(patch_text)
         
-        # Add filename to the issue for clarity
         for issue in file_issues:
             issue['file'] = filename
             all_regex_issues.append(issue)
 
-        # 3. Collect text for AI (We combine them to save API calls)
-        # Limit total size to avoid hitting Token Limits
+        # 3. Collect text for AI
         if len(combined_diff_for_ai) < 10000: 
             combined_diff_for_ai += f"\n--- File: {filename} ---\n{patch_text}\n"
 
@@ -56,7 +49,7 @@ def run_security_scan(files_list, metadata=None):
             "action": "BLOCK",
             "severity": "critical",
             "fix": "Remove hardcoded values.",
-            "diff": combined_diff_for_ai[:2000], # Preview
+            "diff": combined_diff_for_ai[:2000], 
             "issues": all_regex_issues
         }
 

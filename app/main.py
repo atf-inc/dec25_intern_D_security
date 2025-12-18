@@ -5,6 +5,8 @@ Author: ANIRUDH S J
 """
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse
+import hmac
+import hashlib
 import logging
 from typing import Optional
 from app.config import config
@@ -69,6 +71,56 @@ async def health_check():
         return JSONResponse(status_code=503, content=health_status)
    
     return health_status
+
+
+def verify_github_signature(payload: bytes, signature: str) -> bool:
+    """
+    Verify GitHub webhook signature using HMAC SHA256
+    
+    This is CRITICAL for security - prevents unauthorized webhook calls!
+    
+    Args:
+        payload: Raw request body (bytes)
+        signature: X-Hub-Signature-256 header value
+        
+    Returns:
+        True if signature is valid, False otherwise
+    """
+    if not signature:
+        logger.warning("⚠️ No signature provided in webhook request")
+        return False
+    
+    # GitHub sends signature as "sha256=<hash>"
+    if not signature.startswith('sha256='):
+        logger.warning("⚠️ Invalid signature format (must start with 'sha256=')")
+        return False
+    
+    # Get webhook secret
+    secret = config.webhook_secret
+    if not secret:
+        logger.error("❌ Webhook secret not configured!")
+        return False
+    
+    # Calculate expected signature
+    expected_signature = hmac.new(
+        secret.encode('utf-8'),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+    
+    # Extract provided signature (remove "sha256=" prefix)
+    provided_signature = signature.split('=')[1]
+    
+    # Compare using constant-time comparison (prevents timing attacks)
+    is_valid = hmac.compare_digest(expected_signature, provided_signature)
+    
+    if not is_valid:
+        logger.warning("⚠️ Webhook signature verification FAILED!")
+        logger.debug(f"Expected: {expected_signature[:10]}...")
+        logger.debug(f"Provided: {provided_signature[:10]}...")
+    
+    return is_valid
+
 
 # For local testing
 if __name__ == "__main__":

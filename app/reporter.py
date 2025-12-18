@@ -30,7 +30,7 @@ def report_security_issue(scan_result: dict, pr_url: str = None):
         return True
     
     # Use PR URL from metadata if not provided
-    final_pr_url = pr_url or scan_result.get("pr_url", "https://github.com/atf-inc")
+    final_pr_url = pr_url or scan_result.get("pr_url", "https://github.com/atf-inc/dec25_intern_D_security/pulls")
     
     # Get current time in IST and JST
     now_utc = datetime.now(timezone.utc)

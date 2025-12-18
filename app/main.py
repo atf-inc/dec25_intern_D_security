@@ -38,6 +38,7 @@ async def startup_event():
     else:
         logger.warning("⚠️ Some configuration issues detected")
    
+    logger.info(f"📋 Allowed repos: {config.allowed_repos}")
     logger.info("✅ Application ready to receive webhooks")
 
 @app.get("/")
@@ -62,6 +63,7 @@ async def health_check():
     health_status = {
         "status": "healthy",
         "secrets_loaded": bool(config.github_token),
+        "allowed_repos": len(config.allowed_repos),
         "version": "1.0.0"
     }
    
@@ -120,6 +122,44 @@ def verify_github_signature(payload: bytes, signature: str) -> bool:
         logger.debug(f"Provided: {provided_signature[:10]}...")
     
     return is_valid
+
+
+def is_repo_allowed(repo_name: str) -> bool:
+    """
+    Check if repository is in the allowed list
+    
+    Supports wildcards:
+    - "myorg/*" matches all repos in myorg
+    - "myorg/specific-repo" matches exact repo
+    
+    Args:
+        repo_name: Full repo name (e.g., 'octocat/Hello-World')
+        
+    Returns:
+        True if allowed, False otherwise
+    """
+    allowed_repos = config.allowed_repos
+    
+    if not allowed_repos:
+        logger.warning("⚠️ No allowed repos configured - blocking all")
+        return False
+    
+    for pattern in allowed_repos:
+        # Wildcard support (e.g., "myorg/*")
+        if pattern.endswith('/*'):
+            org = pattern[:-2]
+            if repo_name.startswith(f"{org}/"):
+                logger.info(f"✅ Repo {repo_name} matches wildcard pattern: {pattern}")
+                return True
+        
+        # Exact match
+        elif pattern == repo_name:
+            logger.info(f"✅ Repo {repo_name} is explicitly allowed")
+            return True
+    
+    logger.warning(f"⚠️ Repo {repo_name} not in allowed list")
+    logger.debug(f"Allowed patterns: {allowed_repos}")
+    return False
 
 
 # For local testing

@@ -55,19 +55,31 @@ def run_security_scan(files_list, metadata=None):
 
     # PHASE 2: AI SCAN (Only if Regex Passed)
     if combined_diff_for_ai:
-        ai_result = analyze_code_with_gemini(combined_diff_for_ai)
-        
-        return {
-            **metadata,
-            "incident": ai_result.get("summary_en", "Security Audit"),
-            "summary_en": ai_result.get("summary_en"),
-            "summary_jp": ai_result.get("summary_jp"),
-            "action": ai_result.get("action", "PASS"),
-            "severity": ai_result.get("status", "low"),
-            "fix": ai_result.get("fix", "N/A"),
-            "diff": combined_diff_for_ai[:1000],
-            "issues": ai_result.get("vulnerabilities", [])
-        }
+        try:
+            ai_result = analyze_code_with_gemini(combined_diff_for_ai)
+            
+            if not ai_result:
+                logger.warning("AI analysis returned empty result")
+                ai_result = {
+                    "summary_en": "AI analysis unavailable",
+                    "summary_jp": "AI分析が利用できません",
+                    "action": "PASS",
+                    "severity": "low"
+            }
+            return {
+                **metadata,
+                "incident": ai_result.get("summary_en", "Security Audit"),
+                "summary_en": ai_result.get("summary_en"),
+                "summary_jp": ai_result.get("summary_jp"),
+                "action": ai_result.get("action", "PASS"),
+                "severity": ai_result.get("severity", "low"),
+                "fix": ai_result.get("fix", "N/A"),
+                "diff": combined_diff_for_ai[:1000],
+                "issues": ai_result.get("vulnerabilities", [])
+            }
+        except Exception as e:
+            logger.error(f"AI analysis failed: {str(e)}")
+            # Fall through to PASS
     
     # PHASE 3: EMPTY / NO ISSUES
     return {

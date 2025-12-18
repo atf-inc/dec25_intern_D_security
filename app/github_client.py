@@ -68,6 +68,43 @@ class GitHubClient:
             logger.error(f"❌ Failed to access repo {repo_name}: {e}")
             raise
     
+    # Use this to fetch PR metadata before deeper operations like file scanning or status updates
+    def get_pr_details(self, repo_name: str, pr_number: int) -> Dict:
+        """
+        Get detailed information about a Pull Request
+        
+        Args:
+            repo_name: Full repo name
+            pr_number: Pull request number
+            
+        Returns:
+            Dictionary with PR details
+        """
+        try:
+            repo = self.get_repo(repo_name)
+            pr = repo.get_pull(pr_number)
+            details = {
+                'number': pr.number,
+                'title': pr.title,
+                'body': pr.body or '',
+                'author': pr.user.login,
+                'author_avatar': pr.user.avatar_url,
+                'base_branch': pr.base.ref,
+                'head_branch': pr.head.ref,
+                'sha': pr.head.sha,
+                'url': pr.html_url,
+                'state': pr.state,
+                'mergeable': pr.mergeable,
+                'created_at': pr.created_at.isoformat(),
+                'updated_at': pr.updated_at.isoformat()
+            }
+            logger.info(f"✅ Retrieved details for PR #{pr_number}")
+            return details
+        except GithubException as e:
+            logger.error(f"❌ Failed to get PR details: {e}")
+            raise
+    
+    # Critical for scanning code changes; uses PR details for context
     def get_pr_files(self, repo_name: str, pr_number: int) -> List[Dict]:
         """
         Get list of files changed in a Pull Request with their diffs
@@ -136,6 +173,78 @@ class GitHubClient:
         except GithubException as e:
             logger.error(f"❌ Failed to fetch PR files: {e}")
             raise
+    
+    # For providing feedback after scans
+    def post_comment(self, repo_name: str, pr_number: int, comment: str) -> bool:
+        """
+        Post a comment on a Pull Request
+        
+        Args:
+            repo_name: Full repo name (e.g., 'myorg/myrepo')
+            pr_number: Pull request number
+            comment: Comment text (supports markdown)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            repo = self.get_repo(repo_name)
+            pr = repo.get_pull(pr_number)
+            pr.create_issue_comment(comment)
+            logger.info(f"✅ Posted comment to PR #{pr_number} in {repo_name}")
+            return True
+        except GithubException as e:
+            logger.error(f"❌ Failed to post comment: {e}")
+            return False
+    
+    # For gating merges based on scan results; requires SHA from get_pr_details
+    def set_commit_status(
+        self,
+        repo_name: str,
+        sha: str,
+        state: str,
+        description: str,
+        context: str = "ATF Sentinel Security Scan",
+        target_url: Optional[str] = None
+    ) -> bool:
+        """
+        Set commit status (controls PR merge button)
+        This is THE critical function that blocks PRs!
+        
+        Args:
+            repo_name: Full repo name
+            sha: Commit SHA (from PR head)
+            state: 'success' | 'failure' | 'pending' | 'error'
+            description: Status description (max 140 chars)
+            context: Status check name (appears in PR)
+            target_url: Optional URL to link to (e.g., dashboard)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            repo = self.get_repo(repo_name)
+            commit = repo.get_commit(sha)
+            # Truncate description if too long (GitHub limit is 140 chars)
+            description = description[:140] if len(description) > 140 else description
+            # Set the status
+            commit.create_status(
+                state=state,
+                description=description,
+                context=context,
+                target_url=target_url
+            )
+            emoji = {
+                'success': '✅',
+                'failure': '❌',
+                'pending': '⏳',
+                'error': '⚠️'
+            }.get(state, '📌')
+            logger.info(f"{emoji} Set commit status: {state} - {description}")
+            return True
+        except GithubException as e:
+            logger.error(f"❌ Failed to set commit status: {e}")
+            return False
     
     @staticmethod
     def _is_text_file(filename: str) -> bool:

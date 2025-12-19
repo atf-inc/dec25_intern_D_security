@@ -13,6 +13,7 @@ from typing import Optional
 from app.config import config
 from app.github_client import GitHubClient
 from app.scanner import run_security_scan
+from app.reporter import report_security_issue
 
 # Configure logging
 logging.basicConfig(
@@ -355,6 +356,15 @@ async def github_webhook(
                 '✅ Security scan passed'
             )
             status_code = 'success'
+        
+        # Step 13: Send Slack notification if issues found
+        if action_taken in ['BLOCK', 'WARN'] and issues_count > 0:
+            logger.info("📢 Sending Slack notification...")
+            try:
+                report_security_issue(scan_result, pr_url)
+            except Exception as e:
+                logger.error(f"⚠️ Failed to send Slack notification: {e}")
+                # Don't fail the entire webhook if Slack fails
         
         logger.info(f"✅ Successfully processed PR #{pr_number}")
         

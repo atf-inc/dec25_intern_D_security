@@ -19,7 +19,8 @@ SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL')
 # 2. If not in environment, try Secret Manager (for production)
 if not SLACK_WEBHOOK_URL and config:
     try:
-        SLACK_WEBHOOK_URL = config.get_secret('SLACK_WEBHOOK_URL')
+        # Changed from 'SLACK_WEBHOOK_URL' to 'slack-webhook-url' to match GCP
+        SLACK_WEBHOOK_URL = config.get_secret('slack-webhook-url')
     except Exception as e:
         logger.warning(f"Failed to load Slack webhook from Secret Manager: {e}")
         logger.info("💡 Tip: Set SLACK_WEBHOOK_URL environment variable for local testing")

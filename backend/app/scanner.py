@@ -1,4 +1,4 @@
-# app/scanner.py
+# backend/app/scanner.py
 import logging
 from app.pattern_scanner import scan_diff_for_patterns
 from app.gemini_analyzer import analyze_code_with_gemini
@@ -13,8 +13,6 @@ def run_security_scan(files_list, metadata=None):
         metadata = {}
 
     all_regex_issues = []
-    # Removed unused variable to clean up code
-    
     combined_diff_for_ai = ""
 
     # --- LOOP THROUGH EACH FILE ---
@@ -26,8 +24,8 @@ def run_security_scan(files_list, metadata=None):
         if not patch_text:
             continue
 
-        # 2. Run Regex Scan on this file
-        file_issues = scan_diff_for_patterns(patch_text)
+        # 2. Run Regex Scan (PASSING FILENAME NOW)
+        file_issues = scan_diff_for_patterns(patch_text, filename=filename)
         
         for issue in file_issues:
             issue['file'] = filename
@@ -65,7 +63,8 @@ def run_security_scan(files_list, metadata=None):
                     "summary_jp": "AI分析が利用できません",
                     "action": "PASS",
                     "severity": "low"
-            }
+                }
+            
             return {
                 **metadata,
                 "incident": ai_result.get("summary_en", "Security Audit"),
@@ -79,7 +78,7 @@ def run_security_scan(files_list, metadata=None):
             }
         except Exception as e:
             logger.error(f"AI analysis failed: {str(e)}")
-            # Fall through to PASS
+            # Fall through to PASS if AI fails to prevent blocking pipeline
     
     # PHASE 3: EMPTY / NO ISSUES
     return {

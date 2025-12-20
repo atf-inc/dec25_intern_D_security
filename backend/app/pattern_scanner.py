@@ -1,34 +1,49 @@
-# app/pattern_scanner.py
+# backend/app/pattern_scanner.py
 
 import re
 import logging
-from app.patterns import SECRET_PATTERNS, PII_PATTERNS, IGNORE_MARKER
+from app.patterns import SECRET_PATTERNS, PII_PATTERNS, COMMENT_IGNORE_MARKERS
 
-# Setup logging
 logger = logging.getLogger(__name__)
 
-def scan_diff_for_patterns(diff_text):
+def should_ignore_line(file_path: str, line_content: str) -> bool:
+    """
+    Checks if a line contains a valid 'sentinel-ignore' comment 
+    appropriate for the file's language.
+    """
+    # 1. Determine Language from Extension
+    ext = file_path.lower().split('.')[-1] if '.' in file_path else ''
+    
+    ext_to_lang = {
+        'py': 'python', 'js': 'javascript', 'jsx': 'javascript', 
+        'ts': 'typescript', 'tsx': 'typescript', 'java': 'java', 
+        'go': 'go', 'rb': 'ruby', 'php': 'php', 'c': 'c', 
+        'cpp': 'cpp', 'sh': 'bash', 'yaml': 'yaml', 'yml': 'yaml', 
+        'dockerfile': 'dockerfile', 'sql': 'sql'
+    }
+    
+    lang = ext_to_lang.get(ext, 'python') # Default to python
+    
+    # 2. Get the marker for that language
+    marker = COMMENT_IGNORE_MARKERS.get(lang, '# sentinel-ignore:')
+    
+    # 3. Check if line contains the marker
+    if marker in line_content:
+        return True
+        
+    return False
+
+def scan_diff_for_patterns(diff_text, filename="unknown"):
     """
     Scans the git diff for regex matches (Secrets & PII).
-    
-    Logic:
-    - Only looks at added lines (lines starting with '+').
-    - Ignores lines that contain the IGNORE_MARKER.
-    - Skips metadata and binary file warnings.
-
-    Returns:
-        list of dict: A list of found issues with type, severity, rule, line, and description.
+    Accepts filename to determine correct ignore-comment syntax.
     """
     found_issues = []
     
-    # Safety Check: If diff is empty or None, return empty list
     if not diff_text:
         return []
 
-    # Combine both dictionaries to check everything at once
     ALL_PATTERNS = {**SECRET_PATTERNS, **PII_PATTERNS}
-
-    # Split the diff into lines to check line-by-line
     lines = diff_text.split('\n')
 
     for line_num, line in enumerate(lines):
@@ -36,26 +51,23 @@ def scan_diff_for_patterns(diff_text):
         if line.startswith('Binary files'):
             continue
 
-        # 2. Only check added lines (Git diffs start added lines with +)
-        # We also skip lines starting with '+++' (File headers)
+        # 2. Only check added lines
         if not line.startswith('+') or line.startswith('+++'):
             continue
 
-        # 3. CHECK WHITELIST: If developer marked it as test data, skip it.
-        if IGNORE_MARKER in line:
+        # 3. CHECK WHITELIST: Use context-aware ignore logic
+        if should_ignore_line(filename, line):
             continue
 
-        # 4. Clean the line (remove the first '+') for accurate scanning
+        # 4. Clean the line
         clean_line = line[1:]
         
         # 5. Run Regex
         for rule_name, pattern in ALL_PATTERNS.items():
             try:
                 if re.search(pattern, clean_line):
-                    # Determine Severity
                     severity = "CRITICAL" if rule_name in SECRET_PATTERNS else "HIGH"
                     
-                    # Create the issue object
                     issue = {
                         "type": "Pattern Violation",
                         "severity": severity,
@@ -64,14 +76,12 @@ def scan_diff_for_patterns(diff_text):
                         "description": f"Detected potential {rule_name}",
                     }
 
-                    # Smart Fix Logic: Only suggest env vars for Secrets
                     if rule_name in SECRET_PATTERNS:
                         issue["fix_code"] = "Use Environment Variables (os.environ) instead of hardcoding."
                     
                     found_issues.append(issue)
 
             except re.error as e:
-                # Log the error but continue scanning other patterns
                 logger.error(f"Regex error in rule {rule_name}: {e}")
                 continue
 

@@ -41,13 +41,40 @@ class Config:
             self.client = secretmanager.SecretManagerServiceClient()
             logger.info("✅ Secret Manager client initialized")
         except Exception as e:
-            logger.error(f"❌ Could not initialize Secret Manager: {e}")
-            raise
+            logger.warning(f"⚠️ Could not initialize Secret Manager (using env vars for local dev): {e}")
+            self.client = None  # Allow local development without GCP credentials
 
         # Load core secrets with fallbacks to env vars for local dev
         self.github_token = os.getenv('GITHUB_TOKEN') or self._get_secret_safe('github-token')
         self.webhook_secret = os.getenv('WEBHOOK_SECRET') or self._get_secret_safe('webhook-secret')
-        self.allowed_repos = json.loads(os.getenv('ALLOWED_REPOS', '["testorg/*"]')) or self._get_secret_list_safe('allowed-repos')
+        allowed_repos_env = os.getenv('ALLOWED_REPOS', '').strip()
+        if allowed_repos_env:
+            try:
+                self.allowed_repos = json.loads(allowed_repos_env)
+            except json.JSONDecodeError:
+                logger.warning(f"⚠️ Invalid JSON in ALLOWED_REPOS, using default")
+                self.allowed_repos = ["testorg/*"]
+        else:
+            self.allowed_repos = self._get_secret_list_safe('allowed-repos') or ["testorg/*"]
+        
+        # Database configuration
+        self.cloud_sql_connection_name = os.getenv('CLOUD_SQL_CONNECTION_NAME', '')
+        self.db_user = os.getenv('DB_USER', 'postgres')
+        self.db_pass = os.getenv('DB_PASS') or self._get_secret_safe('db-password')
+        self.db_name = os.getenv('DB_NAME', 'atf_sentinel')
+        self.database_url = os.getenv(
+            'DATABASE_URL',
+            f'postgresql://{self.db_user}:{self.db_pass}@localhost:5432/{self.db_name}'
+        )
+        
+        # Gemini AI configuration
+        self.gemini_api_key = os.getenv('GEMINI_API_KEY') or self._get_secret_safe('gemini-api-key')
+        
+        # Slack configuration
+        self.slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL') or self._get_secret_safe('slack-webhook-url')
+        
+        # Frontend URL for CORS
+        self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
    
     def _get_secret_safe(self, secret_name: str) -> str:
         """Safely get secret with fallback to empty string."""
@@ -79,6 +106,8 @@ class Config:
         Raises:
             Exception if secret cannot be loaded
         """
+        if self.client is None:
+            raise Exception("Secret Manager client not initialized (use env vars for local dev)")
         try:
             name = f"projects/{self.project_id}/secrets/{secret_name}/versions/latest"
             response = self.client.access_secret_version(request={"name": name})
@@ -106,6 +135,16 @@ class Config:
         else:
             logger.info("✅ All configuration validated")
         return is_valid
+    
+    def get_database_config(self) -> dict:
+        """Get database configuration as dictionary."""
+        return {
+            "cloud_sql_connection_name": self.cloud_sql_connection_name,
+            "db_user": self.db_user,
+            "db_name": self.db_name,
+            "database_url": self.database_url,
+            "has_password": bool(self.db_pass),
+        }
    
 # Global config instance
 config = Config()

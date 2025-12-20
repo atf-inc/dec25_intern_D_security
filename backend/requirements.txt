@@ -1,0 +1,71 @@
+# ATF Sentinel Backend - Python Dependencies
+# Updated: December 2025
+
+# ===========================================
+# Web Framework
+# ===========================================
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+starlette==0.41.3
+
+# ===========================================
+# Data Validation & Settings
+# ===========================================
+pydantic==2.10.4
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# ===========================================
+# Database - PostgreSQL + SQLAlchemy
+# ===========================================
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+alembic==1.14.0
+
+# Cloud SQL Python Connector (for GCP Cloud Run)
+cloud-sql-python-connector[pg8000]==1.15.0
+pg8000==1.31.2
+
+# ===========================================
+# GitHub Integration
+# ===========================================
+PyGithub==2.5.0
+
+# ===========================================
+# AI Integration - Google Gemini
+# ===========================================
+google-genai==1.0.0
+google-generativeai==0.8.3
+
+# ===========================================
+# GCP Services
+# ===========================================
+google-cloud-secret-manager==2.21.1
+google-auth==2.37.0
+google-api-core==2.24.0
+
+# ===========================================
+# HTTP Client
+# ===========================================
+httpx==0.28.1
+requests==2.32.3
+
+# ===========================================
+# Security & Cryptography
+# ===========================================
+python-jose[cryptography]==3.3.0
+cryptography==44.0.0
+
+# ===========================================
+# Utilities
+# ===========================================
+python-multipart==0.0.19
+orjson==3.10.12
+
+# ===========================================
+# Testing (dev only)
+# ===========================================
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-cov==6.0.0
+httpx==0.28.1

@@ -50,6 +50,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Exception: frontend/lib contains source files, not dependencies
+!frontend/lib/
+
 # ===========================================
 # Environment Files
 # ===========================================

@@ -19,7 +19,8 @@ atf-sentinel/
 │   │   ├── gemini_analyzer.py  # AI-powered analysis
 │   │   ├── github_client.py    # GitHub API integration
 │   │   ├── reporter.py     # Slack notifications
-│   │   └── slack_client.py # Slack API client
+│   │   ├── slack_client.py # Slack API client
+|   |   └── gmail_client.py # Gmail Alerts
 │   ├── tests/
 │   ├── Dockerfile
 │   └── requirements.txt
@@ -55,6 +56,7 @@ atf-sentinel/
 - **AI Chat**: Ask questions about security best practices
 - **Test Generator**: AI-powered security test case generation
 - **Slack Alerts**: Instant notifications for security issues
+- **Email Notifications**: Direct SendGrid alerts to developers for security blocks
 
 ## Tech Stack
 
@@ -64,6 +66,7 @@ atf-sentinel/
 - **Cloud SQL (PostgreSQL)** for data storage
 - **Google Gemini** for AI analysis
 - **PyGithub** for GitHub integration
+- **SendGrid SDK** for email delivery
 
 ### Frontend
 - **Next.js 15** with App Router
@@ -174,6 +177,7 @@ atf-sentinel/
    - `gemini-api-key`
    - `db-password`
    - `database-url`
+   - `sendgrid-api-key`
 
 ### Deploy with Cloud Build
 
@@ -238,6 +242,7 @@ MIT License - see LICENSE file for details.
 
 - **ANIRUDH S J** – ATF Inc.
 - **ABHAY SINGH** – ATF Inc.
+- **VANSHIKHA SRI** – ATF Inc.
 
 ---
 

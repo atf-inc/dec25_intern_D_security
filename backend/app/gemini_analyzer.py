@@ -1,16 +1,14 @@
-# app/gemini_analyzer.py
+# backend/app/gemini_analyzer.py
 
 import os
 import json
 import logging
 import re
 from google import genai
-from google.genai import types # <--- Critical import for JSON config
-
-# Load dotenv (Ensure this is here so it works if run directly)
+from google.genai import types
 from dotenv import load_dotenv
-load_dotenv()
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 def extract_json(text: str):
@@ -22,14 +20,12 @@ def extract_json(text: str):
             raise ValueError("Empty response")
         
         cleaned = text.strip()
-        # Handle Markdown fences (Critical for stability)
         if "```" in cleaned:
             pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
             match = re.search(pattern, cleaned, re.DOTALL)
             if match:
                 return json.loads(match.group(1))
         
-        # Fallback regex
         match = re.search(r'\{.*\}', cleaned, re.DOTALL)
         if match:
             return json.loads(match.group(0))
@@ -39,7 +35,7 @@ def extract_json(text: str):
         logger.error(f"JSON Parsing failed: {e}")
         raise ValueError("Could not extract valid JSON from response")
 
-def analyze_code_with_gemini(diff_text):
+def analyze_code_with_gemini(diff_text, engineer_context=""):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return {
@@ -52,11 +48,12 @@ def analyze_code_with_gemini(diff_text):
         }
 
     try:
-        # Correct Client Initialization (Removed genai.configure which causes crash)
         client = genai.Client(api_key=api_key)
 
         prompt = f"""
         You are a Senior Security Engineer. Analyze the following code.
+        
+        {engineer_context}
         
         RETURN JSON ONLY using this schema:
         {{
@@ -72,7 +69,6 @@ def analyze_code_with_gemini(diff_text):
         {diff_text}
         """
 
-        # Added config to enforce JSON (Prevents "Unterminated string" error)
         response = client.models.generate_content(
             model="gemini-2.5-flash", 
             contents=prompt,

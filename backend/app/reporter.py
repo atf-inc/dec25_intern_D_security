@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime, timezone, timedelta
 from app.slack_client import send_slack_alert
+from backend.app.email_client import send_security_email
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +68,19 @@ def report_security_issue(scan_result: dict, pr_url: str = None):
     try:
         logger.info(f"🚨 Reporting security issue: {alert_data['incident']}")
         logger.info(f"   Severity: {severity.upper()} | Action: {action}")
-        
+
         success = send_slack_alert(alert_data)
-        
-        if success:
-            logger.info("✅ Slack alert sent successfully")
-        else:
-            logger.warning("⚠️ Slack alert may not have been delivered")
-            
+
+        if action == "BLOCK":
+            recipient = scan_result.get("author_email")
+            if recipient:
+                logger.info(f"📧 Triggering email alert for {recipient}")
+                send_security_email(recipient, scan_result)
+            else:
+                logger.warning("⚠️ No author email found; skipping email.")
+
         return success
+
         
     except Exception as e:
         logger.error(f"❌ Failed to send Slack alert: {str(e)}")

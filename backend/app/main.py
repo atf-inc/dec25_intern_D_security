@@ -732,12 +732,15 @@ async def github_webhook(
             }
         
         logger.info(f"✅ Found {len(pr_files)} files to scan")
+        logger.info(f"📧 Fetching author email for PR #{pr_number}...")
+        author_email = github_client.get_pr_author_email(repo_name, pr_number)
         
         logger.info("🔍 Running security scan...")
         metadata = {
             "repo": repo_name,
             "branch": branch,
             "author": pr_author,
+            "author_email": author_email,
             "pr_url": pr_url
         }
         

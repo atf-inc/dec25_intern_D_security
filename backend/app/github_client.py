@@ -174,6 +174,28 @@ class GitHubClient:
             logger.error(f"❌ Failed to fetch PR files: {e}")
             raise
     
+    # Use this to fetch gmail from PRs
+    def get_pr_author_email(self, repo_name: str, pr_number: int) -> Optional[str]:
+        """
+        Retrieves the email address from the most recent commit in the PR.
+        This is the most reliable way to get the author's email.
+        """
+        try:
+            repo = self.get_repo(repo_name)
+            pr = repo.get_pull(pr_number)
+
+            # Get the latest commit
+            commits = pr.get_commits()
+            latest_commit = commits.reversed[0]
+
+            return latest_commit.commit.author.email
+
+        except Exception as e:
+            logger.error(
+                f"❌ Could not retrieve author email for PR #{pr_number}: {e}"
+            )
+            return None
+
     # For providing feedback after scans
     def post_comment(self, repo_name: str, pr_number: int, comment: str) -> bool:
         """

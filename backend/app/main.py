@@ -3,7 +3,7 @@ ATF Sentinel - GitHub Webhook Server
 Main FastAPI application that receives and processes GitHub PR events
 Author: ANIRUDH S J
 """
-from fastapi import FastAPI, Request, Header, HTTPException, Depends, Query, BackgroundTasks
+from fastapi import FastAPI, Request, Header, HTTPException, Depends, Query, BackgroundTasks, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -926,14 +926,18 @@ async def github_webhook(
         )
         
         # Return immediately to avoid GitHub timeout
-        return {
-            "status": "accepted",
-            "message": "Webhook received and queued for processing",
-            "repo": repo_name,
-            "pr": pr_number,
-            "author": pr_author,
-            "note": "Scan is processing in the background. Check commit status for results."
-        }
+        # Use 202 Accepted since we're processing asynchronously
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "status": "accepted",
+                "message": "Webhook received and queued for processing",
+                "repo": repo_name,
+                "pr": pr_number,
+                "author": pr_author,
+                "note": "Scan is processing in the background. Check commit status for results."
+            }
+        )
         
     except HTTPException:
         raise

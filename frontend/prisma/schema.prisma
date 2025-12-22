@@ -1,0 +1,194 @@
+// ATF Sentinel - Prisma Schema
+// Matches SQLAlchemy models in backend/app/models.py
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// Enums
+// ===========================================
+
+enum ScanAction {
+  PASS
+  WARN
+  BLOCK
+}
+
+enum Severity {
+  low
+  medium
+  high
+  critical
+}
+
+// ===========================================
+// Models
+// ===========================================
+
+model Repository {
+  id           String   @id // e.g., "org/repo-name"
+  name         String
+  organization String
+  isActive     Boolean  @default(true) @map("is_active")
+  totalScans   Int      @default(0) @map("total_scans")
+  totalIssues  Int      @default(0) @map("total_issues")
+  blockedPrs   Int      @default(0) @map("blocked_prs")
+  lastScanAt   DateTime? @map("last_scan_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  scanResults  ScanResult[]
+  dailyMetrics DailyMetrics[]
+
+  @@index([organization])
+  @@index([isActive])
+  @@map("repositories")
+}
+
+model Engineer {
+  id                    String   @id // GitHub username
+  displayName           String?  @map("display_name")
+  email                 String?
+  avatarUrl             String?  @map("avatar_url")
+
+  // Metrics
+  totalPrs              Int      @default(0) @map("total_prs")
+  cleanPrs              Int      @default(0) @map("clean_prs")
+  warnedPrs             Int      @default(0) @map("warned_prs")
+  blockedPrs            Int      @default(0) @map("blocked_prs")
+  totalIssuesIntroduced Int      @default(0) @map("total_issues_introduced")
+  issuesFixed           Int      @default(0) @map("issues_fixed")
+  securityScore         Float    @default(100.0) @map("security_score")
+
+  // Timestamps
+  firstSeenAt           DateTime @default(now()) @map("first_seen_at")
+  lastActivityAt        DateTime @updatedAt @map("last_activity_at")
+
+  // Relations
+  scanResults           ScanResult[]
+
+  @@index([securityScore])
+  @@map("engineers")
+}
+
+model ScanResult {
+  id           String     @id @default(cuid())
+
+  // PR Information
+  repoId       String     @map("repo_id")
+  prNumber     Int        @map("pr_number")
+  prTitle      String?    @map("pr_title")
+  prUrl        String?    @map("pr_url")
+  commitSha    String     @map("commit_sha")
+  branch       String?
+
+  // Author
+  authorId     String     @map("author_id")
+
+  // Scan Results
+  action       ScanAction @default(PASS)
+  severity     Severity   @default(low)
+  issuesCount  Int        @default(0) @map("issues_count")
+  filesScanned Int        @default(0) @map("files_scanned")
+
+  // AI Analysis
+  summaryEn    String?    @map("summary_en")
+  summaryJp    String?    @map("summary_jp")
+  fixSuggestion String?   @map("fix_suggestion")
+
+  // Raw data
+  scanMetadata Json?      @map("scan_metadata")
+
+  // Timestamps
+  createdAt    DateTime   @default(now()) @map("created_at")
+  scanDurationMs Int?     @map("scan_duration_ms")
+
+  // Relations
+  repository   Repository @relation(fields: [repoId], references: [id])
+  engineer     Engineer   @relation(fields: [authorId], references: [id])
+  issues       SecurityIssue[]
+
+  @@index([repoId])
+  @@index([authorId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([repoId, prNumber])
+  @@map("scan_results")
+}
+
+model SecurityIssue {
+  id             String     @id @default(cuid())
+  scanId         String     @map("scan_id")
+
+  // Issue details
+  filePath       String     @map("file_path")
+  lineNumber     Int?       @map("line_number")
+  patternName    String     @map("pattern_name")
+  patternType    String?    @map("pattern_type")
+
+  // Content (sanitized)
+  matchedContent String?    @map("matched_content")
+  context        String?
+
+  // Classification
+  severity       Severity   @default(medium)
+  isFalsePositive Boolean   @default(false) @map("is_false_positive")
+
+  // Resolution
+  isResolved     Boolean    @default(false) @map("is_resolved")
+  resolvedAt     DateTime?  @map("resolved_at")
+  resolvedBy     String?    @map("resolved_by")
+
+  // Timestamps
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  // Relations
+  scanResult     ScanResult @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([patternName])
+  @@index([severity])
+  @@index([isResolved])
+  @@map("security_issues")
+}
+
+model DailyMetrics {
+  id             String     @id @default(cuid())
+  date           DateTime
+  repoId         String?    @map("repo_id")
+
+  // Counts
+  totalScans     Int        @default(0) @map("total_scans")
+  passedScans    Int        @default(0) @map("passed_scans")
+  warnedScans    Int        @default(0) @map("warned_scans")
+  blockedScans   Int        @default(0) @map("blocked_scans")
+
+  // Issues by severity
+  criticalIssues Int        @default(0) @map("critical_issues")
+  highIssues     Int        @default(0) @map("high_issues")
+  mediumIssues   Int        @default(0) @map("medium_issues")
+  lowIssues      Int        @default(0) @map("low_issues")
+
+  // Top patterns (JSON array)
+  topPatterns    Json?      @map("top_patterns")
+
+  // Timestamps
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  repository     Repository? @relation(fields: [repoId], references: [id])
+
+  @@index([date])
+  @@index([repoId])
+  @@index([date, repoId])
+  @@map("daily_metrics")
+}
+

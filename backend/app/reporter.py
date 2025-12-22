@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone, timedelta
 from app.slack_client import send_slack_alert
-from backend.app.email_client import send_security_email
+from app.email_client import send_security_email
 
 logger = logging.getLogger(__name__)
 

@@ -59,7 +59,7 @@ sendgrid==6.12.5
 # Security & Cryptography
 # ===========================================
 python-jose[cryptography]==3.3.0
-cryptography==44.0.0
+cryptography>=45.0.6
 
 # ===========================================
 # Utilities

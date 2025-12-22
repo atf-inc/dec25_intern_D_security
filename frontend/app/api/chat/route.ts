@@ -22,10 +22,17 @@ export async function POST(request: NextRequest) {
     const response = await chatWithGemini(chatHistory, message);
 
     return NextResponse.json({ response });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Chat API error:", error);
+    
+    // Return more specific error messages
+    const errorMessage = error?.message || "Failed to process chat request";
+    
     return NextResponse.json(
-      { error: "Failed to process chat request" },
+      { 
+        error: errorMessage,
+        details: error?.message 
+      },
       { status: 500 }
     );
   }

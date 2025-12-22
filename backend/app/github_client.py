@@ -95,8 +95,8 @@ class GitHubClient:
                 'url': pr.html_url,
                 'state': pr.state,
                 'mergeable': pr.mergeable,
-                'created_at': pr.created_at.isoformat(),
-                'updated_at': pr.updated_at.isoformat()
+                'created_at': pr.created_at.isoformat() if pr.created_at else None,
+                'updated_at': pr.updated_at.isoformat() if pr.updated_at else None
             }
             logger.info(f"✅ Retrieved details for PR #{pr_number}")
             return details
@@ -244,18 +244,24 @@ class GitHubClient:
         Returns:
             True if successful, False otherwise
         """
+        if not sha or not isinstance(sha, str) or len(sha) < 7:
+            logger.error(f"❌ Invalid commit SHA: {sha}")
+            return False
+            
         try:
             repo = self.get_repo(repo_name)
             commit = repo.get_commit(sha)
             # Truncate description if too long (GitHub limit is 140 chars)
             description = description[:140] if len(description) > 140 else description
-            # Set the status
-            commit.create_status(
-                state=state,
-                description=description,
-                context=context,
-                target_url=target_url
-            )
+            # Set the status - only pass target_url if it's not None
+            status_params = {
+                'state': state,
+                'description': description,
+                'context': context
+            }
+            if target_url:
+                status_params['target_url'] = target_url
+            commit.create_status(**status_params)
             emoji = {
                 'success': '✅',
                 'failure': '❌',
@@ -264,8 +270,11 @@ class GitHubClient:
             }.get(state, '📌')
             logger.info(f"{emoji} Set commit status: {state} - {description}")
             return True
-        except GithubException as e:
-            logger.error(f"❌ Failed to set commit status: {e}")
+        except (GithubException, AssertionError, AttributeError) as e:
+            logger.error(f"❌ Failed to set commit status for SHA {sha[:7]}...: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Unexpected error setting commit status: {e}")
             return False
     
     @staticmethod

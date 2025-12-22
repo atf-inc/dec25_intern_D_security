@@ -1,10 +1,44 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // Initialize Gemini AI client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+const apiKey = process.env.GEMINI_API_KEY || "";
+if (!apiKey) {
+  console.warn("⚠️ GEMINI_API_KEY not set - AI features will not work");
+}
 
-// Get the generative model
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const genAI = new GoogleGenerativeAI(apiKey);
+
+/**
+ * Helper function to get a working model by trying multiple model names
+ * Using latest models first (as of 2025)
+ */
+async function tryGenerateContent(prompt: string): Promise<string> {
+  const modelsToTry = [
+    "gemini-3-pro",              // Latest Gemini 3 Pro (Nov 2025)
+    "gemini-3-flash",            // Latest Gemini 3 Flash (Dec 2025)
+    "gemini-2.5-pro",            // Gemini 2.5 Pro with enhanced capabilities
+    "gemini-2.5-flash",           // Gemini 2.5 Flash
+    "gemini-1.5-pro-latest",     // Latest stable 1.5 pro model
+    "gemini-1.5-flash-latest",   // Latest stable 1.5 flash model
+    "gemini-1.5-pro",            // Stable 1.5 pro model
+    "gemini-1.5-flash",          // Stable 1.5 flash model
+  ];
+
+  let lastError: any = null;
+
+  for (const modelName of modelsToTry) {
+    try {
+      const currentModel = genAI.getGenerativeModel({ model: modelName });
+      const result = await currentModel.generateContent(prompt);
+      return result.response.text();
+    } catch (error: any) {
+      lastError = error;
+      continue;
+    }
+  }
+
+  throw lastError || new Error("Failed to generate content with any available model");
+}
 
 /**
  * Chat message type
@@ -34,45 +68,85 @@ export async function chatWithGemini(
   messages: ChatMessage[],
   userMessage: string
 ): Promise<string> {
-  try {
-    // Build conversation history
-    const history = messages.map((msg) => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
-    }));
-
-    // Start chat with history
-    const chat = model.startChat({
-      history: [
-        {
-          role: "user",
-          parts: [{ text: SECURITY_CONTEXT }],
-        },
-        {
-          role: "model",
-          parts: [
-            {
-              text: "I understand. I'm ATF Sentinel's AI security assistant, ready to help with security questions, vulnerability analysis, and secure coding practices.",
-            },
-          ],
-        },
-        ...history,
-      ],
-      generationConfig: {
-        maxOutputTokens: 2048,
-        temperature: 0.7,
-      },
-    });
-
-    // Send message and get response
-    const result = await chat.sendMessage(userMessage);
-    const response = result.response;
-    
-    return response.text();
-  } catch (error) {
-    console.error("Gemini chat error:", error);
-    throw new Error("Failed to get AI response. Please try again.");
+  // Check if API key is set
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured. Please set it in your environment variables.");
   }
+
+  // Try different models if one fails - using latest models first (as of 2025)
+  const modelsToTry = [
+    "gemini-3-pro",              // Latest Gemini 3 Pro (Nov 2025)
+    "gemini-3-flash",            // Latest Gemini 3 Flash (Dec 2025)
+    "gemini-2.5-pro",            // Gemini 2.5 Pro with enhanced capabilities
+    "gemini-2.5-flash",          // Gemini 2.5 Flash
+    "gemini-1.5-pro-latest",     // Latest stable 1.5 pro model
+    "gemini-1.5-flash-latest",   // Latest stable 1.5 flash model
+    "gemini-1.5-pro",            // Stable 1.5 pro model
+    "gemini-1.5-flash",          // Stable 1.5 flash model
+  ];
+
+  let lastError: any = null;
+
+  for (const modelName of modelsToTry) {
+    try {
+      const currentModel = genAI.getGenerativeModel({ model: modelName });
+      
+      // Build conversation history
+      const history = messages.map((msg) => ({
+        role: msg.role === "user" ? "user" : "model",
+        parts: [{ text: msg.content }],
+      }));
+
+      // Start chat with history
+      const chat = currentModel.startChat({
+        history: [
+          {
+            role: "user",
+            parts: [{ text: SECURITY_CONTEXT }],
+          },
+          {
+            role: "model",
+            parts: [
+              {
+                text: "I understand. I'm ATF Sentinel's AI security assistant, ready to help with security questions, vulnerability analysis, and secure coding practices.",
+              },
+            ],
+          },
+          ...history,
+        ],
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0.7,
+        },
+      });
+
+      // Send message and get response
+      const result = await chat.sendMessage(userMessage);
+      const response = result.response;
+      
+      return response.text();
+    } catch (error: any) {
+      lastError = error;
+      console.log(`Model ${modelName} failed, trying next...`);
+      // Continue to next model
+      continue;
+    }
+  }
+
+  // If all models failed, throw error with details
+  console.error("Gemini chat error - all models failed:", lastError);
+  
+  if (lastError?.message?.includes("API key") || lastError?.message?.includes("401")) {
+    throw new Error("Invalid or missing Gemini API key. Please check your GEMINI_API_KEY environment variable.");
+  }
+  if (lastError?.message?.includes("quota") || lastError?.message?.includes("429")) {
+    throw new Error("API quota exceeded. Please try again later.");
+  }
+  if (lastError?.message?.includes("not found") || lastError?.message?.includes("404")) {
+    throw new Error("No compatible Gemini model found. Please verify your API key has access to Gemini models.");
+  }
+  
+  throw new Error(`Failed to get AI response: ${lastError?.message || "Unknown error"}`);
 }
 
 /**
@@ -99,11 +173,10 @@ Provide test cases in a format appropriate for the language (e.g., pytest for Py
 Include both positive and negative test cases.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    return result.response.text();
-  } catch (error) {
+    return await tryGenerateContent(prompt);
+  } catch (error: any) {
     console.error("Test generation error:", error);
-    throw new Error("Failed to generate security tests. Please try again.");
+    throw new Error(`Failed to generate security tests: ${error?.message || "Unknown error"}`);
   }
 }
 
@@ -145,8 +218,7 @@ Respond in JSON format with:
 }`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const text = await tryGenerateContent(prompt);
     
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -155,9 +227,9 @@ Respond in JSON format with:
     }
     
     return JSON.parse(jsonMatch[0]);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Code analysis error:", error);
-    throw new Error("Failed to analyze code. Please try again.");
+    throw new Error(`Failed to analyze code: ${error?.message || "Unknown error"}`);
   }
 }
 
@@ -175,11 +247,10 @@ Structure your response as:
 5. Code example (if applicable)`;
 
   try {
-    const result = await model.generateContent(prompt);
-    return result.response.text();
-  } catch (error) {
+    return await tryGenerateContent(prompt);
+  } catch (error: any) {
     console.error("Explanation error:", error);
-    throw new Error("Failed to explain concept. Please try again.");
+    throw new Error(`Failed to explain concept: ${error?.message || "Unknown error"}`);
   }
 }
 

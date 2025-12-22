@@ -2,7 +2,8 @@
 import logging
 from app.pattern_scanner import scan_diff_for_patterns
 from app.gemini_analyzer import analyze_code_with_gemini
-# REMOVED: from app.champion import check_security_champion (Feature Dropped)
+# RESTORED: Champion Logic
+from app.champion import check_security_champion
 from app.security_memory import get_engineer_profile, update_engineer_profile
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,23 @@ def run_security_scan(files_list, metadata=None):
                     "action": "PASS",
                     "severity": "low"
                 }
+
+            # --- CHAMPION LOGIC RESTORED HERE ---
+            # Only runs if the code is CLEAN (PASS)
+            if ai_result.get("action") == "PASS":
+                champion_data = check_security_champion(combined_diff_for_ai)
+                
+                if champion_data and champion_data.get('is_security_fix'):
+                    badge = champion_data.get('badge', '🛡️')
+                    praise = champion_data.get('praise_message', 'Great work!')
+                    
+                    # Append praise to the existing summary (Safe append)
+                    current_summary = ai_result.get("summary_en", "")
+                    current_summary_jp = ai_result.get("summary_jp", "")
+                    
+                    ai_result["summary_en"] = f"{current_summary}\n\n🏆 **Security Champion!**\n{badge} {praise}"
+                    ai_result["summary_jp"] = f"{current_summary_jp}\n\n🏆 **セキュリティ・チャンピオン！**\n{badge} 素晴らしい修正です。"
+            # ------------------------------------
 
             return {
                 **metadata,

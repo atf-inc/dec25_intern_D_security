@@ -40,12 +40,13 @@ deploy_backend() {
         --platform managed \
         --allow-unauthenticated \
         --add-cloudsql-instances ${CLOUD_SQL_INSTANCE} \
-        --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID},CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_INSTANCE}" \
+        --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID},CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_INSTANCE},DB_USER=postgres,DB_NAME=atf_sentinel" \
         --set-secrets "GITHUB_TOKEN=github-token:latest,WEBHOOK_SECRET=webhook-secret:latest,GEMINI_API_KEY=gemini-api-key:latest,DB_PASS=db-password:latest" \
         --memory 512Mi \
         --cpu 1 \
         --min-instances 0 \
-        --max-instances 10
+        --max-instances 10 \
+        --timeout 300
     
     echo -e "${GREEN}✅ Backend deployed successfully!${NC}"
     
@@ -89,7 +90,8 @@ deploy_frontend() {
         --memory 512Mi \
         --cpu 1 \
         --min-instances 0 \
-        --max-instances 10
+        --max-instances 10 \
+        --timeout 300
     
     echo -e "${GREEN}✅ Frontend deployed successfully!${NC}"
     
@@ -106,11 +108,14 @@ create_database() {
     if gcloud sql instances describe atf-sentinel-db --project=${PROJECT_ID} &>/dev/null; then
         echo -e "${GREEN}Cloud SQL instance already exists.${NC}"
     else
+        # Note: Binary logging (--enable-bin-log) is MySQL-only and cannot be used with PostgreSQL
+        # PostgreSQL uses Write-Ahead Logging (WAL) instead, which is enabled by default
         gcloud sql instances create atf-sentinel-db \
             --database-version=POSTGRES_15 \
             --tier=db-f1-micro \
             --region=${REGION} \
-            --project=${PROJECT_ID}
+            --project=${PROJECT_ID} \
+            --maintenance-window-hour=04
         
         # Create database
         gcloud sql databases create atf_sentinel \

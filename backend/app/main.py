@@ -3,7 +3,7 @@ ATF Sentinel - GitHub Webhook Server
 Main FastAPI application that receives and processes GitHub PR events
 Author: ANIRUDH S J
 """
-from fastapi import FastAPI, Request, Header, HTTPException, Depends, Query
+from fastapi import FastAPI, Request, Header, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -706,9 +706,129 @@ def save_scan_result(
     return scan
 
 
+async def process_pr_scan_background(
+    repo_name: str,
+    pr_number: int,
+    pr_title: str,
+    pr_url: str,
+    pr_sha: str,
+    branch: str,
+    pr_author: str
+):
+    """
+    Background task to process PR scan without blocking webhook response.
+    This prevents GitHub webhook timeout (10 seconds limit).
+    """
+    try:
+        # Check if GitHub client is available
+        if not github_client:
+            logger.error("❌ [Background] GitHub client not initialized")
+            return
+        
+        # Type assertion for linter - github_client is guaranteed to be non-None after check above
+        assert github_client is not None, "GitHub client must be initialized"
+        client = github_client
+        
+        # Get a new database session for background task
+        from app.database import get_session_local
+        SessionLocal = get_session_local()
+        db = SessionLocal()
+        
+        try:
+            logger.info(f"📁 [Background] Fetching files from PR #{pr_number}...")
+            pr_files = client.get_pr_files(repo_name, pr_number)
+            
+            if not pr_files:
+                logger.warning(f"⚠️ [Background] No text files to scan in PR #{pr_number}")
+                if pr_sha and len(pr_sha) >= 7:
+                    client.set_commit_status(
+                        repo_name, pr_sha, 'success', '✅ No files to scan'
+                    )
+                return
+            
+            logger.info(f"✅ [Background] Found {len(pr_files)} files to scan")
+            logger.info(f"📧 [Background] Fetching author email for PR #{pr_number}...")
+            author_email = client.get_pr_author_email(repo_name, pr_number)
+            
+            logger.info("🔍 [Background] Running security scan...")
+            metadata = {
+                "repo": repo_name,
+                "branch": branch,
+                "author": pr_author,
+                "author_email": author_email,
+                "pr_url": pr_url
+            }
+            
+            scan_result = run_security_scan(pr_files, metadata)
+            
+            action_taken = scan_result.get('action', 'PASS')
+            severity = scan_result.get('severity', 'low')
+            issues_count = len(scan_result.get('issues', []))
+            
+            logger.info(f"📊 [Background] Scan Results: {action_taken} | Severity: {severity} | Issues: {issues_count}")
+            
+            # Save to database
+            try:
+                save_scan_result(
+                    db=db,
+                    repo_name=repo_name,
+                    pr_number=pr_number,
+                    pr_title=pr_title,
+                    pr_url=pr_url,
+                    commit_sha=pr_sha,
+                    branch=branch,
+                    author=pr_author,
+                    scan_result=scan_result,
+                    files_scanned=len(pr_files)
+                )
+                logger.info("✅ [Background] Scan result saved to database")
+            except Exception as e:
+                logger.error(f"⚠️ [Background] Failed to save scan result: {e}", exc_info=True)
+            
+            # Set final commit status
+            if pr_sha and len(pr_sha) >= 7:
+                if action_taken == 'BLOCK':
+                    client.set_commit_status(
+                        repo_name, pr_sha, 'failure',
+                        f'🚫 Security issues found ({issues_count} critical)'
+                    )
+                elif action_taken == 'WARN':
+                    client.set_commit_status(
+                        repo_name, pr_sha, 'success',
+                        f'⚠️ Warnings found ({issues_count} issues)'
+                    )
+                else:
+                    client.set_commit_status(
+                        repo_name, pr_sha, 'success', '✅ Security scan passed'
+                    )
+            
+            # Send Slack notification if needed
+            if action_taken in ['BLOCK', 'WARN'] and issues_count > 0:
+                logger.info("📢 [Background] Sending Slack notification...")
+                try:
+                    report_security_issue(scan_result, pr_url)
+                except Exception as e:
+                    logger.error(f"⚠️ [Background] Failed to send Slack notification: {e}")
+            
+            logger.info(f"✅ [Background] Successfully processed PR #{pr_number}")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"❌ [Background] Error processing PR scan: {e}", exc_info=True)
+        try:
+            if github_client and pr_sha and len(pr_sha) >= 7:
+                client = github_client  # Use local reference
+                client.set_commit_status(
+                    repo_name, pr_sha, 'error', '⚠️ Error during scan'
+                )
+        except Exception:
+            pass
+
+
 @app.post("/webhook/github")
 async def github_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_hub_signature_256: Optional[str] = Header(None),
     x_github_event: Optional[str] = Header(None),
     x_github_delivery: Optional[str] = Header(None),
@@ -782,130 +902,37 @@ async def github_webhook(
         if not github_client:
             raise HTTPException(status_code=503, detail="GitHub client not initialized")
         
+        # Set pending status immediately
         logger.info("⏳ Setting pending status...")
-        # Validate SHA before setting status
-        if not pr_sha or len(pr_sha) < 7:
-            logger.warning(f"⚠️ Invalid commit SHA: {pr_sha}, skipping status update")
-        else:
-            status_set = github_client.set_commit_status(
+        if pr_sha and len(pr_sha) >= 7:
+            github_client.set_commit_status(
                 repo_name,
                 pr_sha,
                 'pending',
                 '🔍 Security scan in progress...'
             )
-            if not status_set:
-                logger.warning(f"⚠️ Failed to set pending status, continuing anyway...")
         
-        logger.info(f"📁 Fetching files from PR #{pr_number}...")
-        try:
-            pr_files = github_client.get_pr_files(repo_name, pr_number)
-        except Exception as e:
-            logger.error(f"❌ Failed to fetch PR files: {e}")
-            github_client.set_commit_status(
-                repo_name, pr_sha, 'error', '⚠️ Failed to fetch PR files'
-            )
-            raise HTTPException(status_code=500, detail=f"Failed to fetch PR files: {str(e)}")
+        # Queue background task for processing (returns immediately)
+        logger.info(f"📋 Queuing PR #{pr_number} for background processing...")
+        background_tasks.add_task(
+            process_pr_scan_background,
+            repo_name=repo_name,
+            pr_number=pr_number,
+            pr_title=pr_title,
+            pr_url=pr_url,
+            pr_sha=pr_sha,
+            branch=branch,
+            pr_author=pr_author
+        )
         
-        if not pr_files:
-            logger.warning(f"⚠️ No text files to scan in PR #{pr_number}")
-            github_client.set_commit_status(
-                repo_name, pr_sha, 'success', '✅ No files to scan'
-            )
-            return {
-                "status": "success",
-                "message": "No text files to scan",
-                "pr": pr_number,
-                "repo": repo_name
-            }
-        
-        logger.info(f"✅ Found {len(pr_files)} files to scan")
-        logger.info(f"📧 Fetching author email for PR #{pr_number}...")
-        author_email = github_client.get_pr_author_email(repo_name, pr_number)
-        
-        logger.info("🔍 Running security scan...")
-        metadata = {
-            "repo": repo_name,
-            "branch": branch,
-            "author": pr_author,
-            "author_email": author_email,
-            "pr_url": pr_url
-        }
-        
-        try:
-            scan_result = run_security_scan(pr_files, metadata)
-        except Exception as e:
-            logger.error(f"❌ Scanner failed: {e}")
-            github_client.set_commit_status(
-                repo_name, pr_sha, 'error', '⚠️ Scanner error'
-            )
-            raise HTTPException(status_code=500, detail=f"Scanner error: {str(e)}")
-        
-        action_taken = scan_result.get('action', 'PASS')
-        severity = scan_result.get('severity', 'low')
-        issues_count = len(scan_result.get('issues', []))
-        
-        logger.info(f"📊 Scan Results: {action_taken} | Severity: {severity} | Issues: {issues_count}")
-        
-        # Save to database
-        try:
-            save_scan_result(
-                db=db,
-                repo_name=repo_name,
-                pr_number=pr_number,
-                pr_title=pr_title,
-                pr_url=pr_url,
-                commit_sha=pr_sha,
-                branch=branch,
-                author=pr_author,
-                scan_result=scan_result,
-                files_scanned=len(pr_files)
-            )
-            logger.info("✅ Scan result saved to database")
-        except Exception as e:
-            logger.error(f"⚠️ Failed to save scan result: {e}", exc_info=True)
-            # Re-raise to ensure webhook fails if save fails
-            raise HTTPException(status_code=500, detail=f"Failed to save scan result: {str(e)}")
-        
-        if action_taken == 'BLOCK':
-            github_client.set_commit_status(
-                repo_name, pr_sha, 'failure',
-                f'🚫 Security issues found ({issues_count} critical)'
-            )
-            status_code = 'failure'
-        elif action_taken == 'WARN':
-            github_client.set_commit_status(
-                repo_name, pr_sha, 'success',
-                f'⚠️ Warnings found ({issues_count} issues)'
-            )
-            status_code = 'success'
-        else:
-            github_client.set_commit_status(
-                repo_name, pr_sha, 'success', '✅ Security scan passed'
-            )
-            status_code = 'success'
-        
-        if action_taken in ['BLOCK', 'WARN'] and issues_count > 0:
-            logger.info("📢 Sending Slack notification...")
-            try:
-                report_security_issue(scan_result, pr_url)
-            except Exception as e:
-                logger.error(f"⚠️ Failed to send Slack notification: {e}")
-        
-        logger.info(f"✅ Successfully processed PR #{pr_number}")
-        
+        # Return immediately to avoid GitHub timeout
         return {
-            "status": "success",
-            "message": "Security scan completed",
+            "status": "accepted",
+            "message": "Webhook received and queued for processing",
             "repo": repo_name,
             "pr": pr_number,
             "author": pr_author,
-            "scan_result": {
-                "action": action_taken,
-                "severity": severity,
-                "issues_count": issues_count,
-                "status": status_code
-            },
-            "files_scanned": len(pr_files)
+            "note": "Scan is processing in the background. Check commit status for results."
         }
         
     except HTTPException:

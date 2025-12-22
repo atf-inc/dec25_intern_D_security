@@ -95,8 +95,8 @@ class GitHubClient:
                 'url': pr.html_url,
                 'state': pr.state,
                 'mergeable': pr.mergeable,
-                'created_at': pr.created_at.isoformat(),
-                'updated_at': pr.updated_at.isoformat()
+                'created_at': pr.created_at.isoformat() if pr.created_at else None,
+                'updated_at': pr.updated_at.isoformat() if pr.updated_at else None
             }
             logger.info(f"✅ Retrieved details for PR #{pr_number}")
             return details
@@ -253,13 +253,15 @@ class GitHubClient:
             commit = repo.get_commit(sha)
             # Truncate description if too long (GitHub limit is 140 chars)
             description = description[:140] if len(description) > 140 else description
-            # Set the status
-            commit.create_status(
-                state=state,
-                description=description,
-                context=context,
-                target_url=target_url
-            )
+            # Set the status - only pass target_url if it's not None
+            status_params = {
+                'state': state,
+                'description': description,
+                'context': context
+            }
+            if target_url:
+                status_params['target_url'] = target_url
+            commit.create_status(**status_params)
             emoji = {
                 'success': '✅',
                 'failure': '❌',

@@ -7,7 +7,7 @@ from app.email_client import send_security_email
 
 logger = logging.getLogger(__name__)
 
-def report_security_issue(scan_result: dict, pr_url: str = None):
+def report_security_issue(scan_result: dict, pr_url: str ="None") -> bool:
     """
     Formats scan results and sends a Slack alert.
     
@@ -72,15 +72,17 @@ def report_security_issue(scan_result: dict, pr_url: str = None):
         success = send_slack_alert(alert_data)
 
         if action == "BLOCK":
+            # Ensure we get a value, but still verify it's not None/empty
             recipient = scan_result.get("author_email")
-            if recipient:
+            
+            # Explicitly check that recipient is a truthy string to satisfy Pylance
+            if isinstance(recipient, str) and recipient.strip():
                 logger.info(f"📧 Triggering email alert for {recipient}")
                 send_security_email(recipient, scan_result)
             else:
-                logger.warning("⚠️ No author email found; skipping email.")
-
+                logger.warning("⚠️ No valid author email found; skipping email.")
+        
         return success
-
         
     except Exception as e:
         logger.error(f"❌ Failed to send Slack alert: {str(e)}")

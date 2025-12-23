@@ -98,6 +98,9 @@ class Config:
         
         # Slack configuration
         self.slack_webhook_url = os.getenv('SLACK_WEBHOOK_URL') or self._get_secret_safe('slack-webhook-url')
+
+        # SendGrid configuration
+        self.security_admin_email = os.getenv('SECURITY_ADMIN_EMAIL') or self._get_secret_safe('security-admin-email')
         
         # Frontend URL for CORS
         self.frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
@@ -177,6 +180,7 @@ config = Config()
 
 # For testing this module directly
 if __name__ == "__main__":
+    print(config.security_admin_email)
     print("\n🧪 Testing Configuration...\n")
     print("="*50)
    

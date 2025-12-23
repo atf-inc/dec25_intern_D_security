@@ -747,15 +747,15 @@ async def process_pr_scan_background(
                 return
             
             logger.info(f"✅ [Background] Found {len(pr_files)} files to scan")
-            logger.info(f"📧 [Background] Fetching author email for PR #{pr_number}...")
-            author_email = client.get_pr_author_email(repo_name, pr_number)
+            recipient_email = config.security_admin_email or "fallback@example.com"
+            logger.info(f"📧 [Background] Using security admin recipient: {recipient_email}")
             
             logger.info("🔍 [Background] Running security scan...")
             metadata = {
                 "repo": repo_name,
                 "branch": branch,
                 "author": pr_author,
-                "author_email": author_email,
+                "author_email": recipient_email,
                 "pr_url": pr_url
             }
             
@@ -804,13 +804,18 @@ async def process_pr_scan_background(
             
             # Send Slack notification if needed
             if action_taken in ['BLOCK', 'WARN'] and issues_count > 0:
-                logger.info("📢 [Background] Sending Slack notification...")
+                logger.info("📢 [Background] Sending notifications...")
                 try:
+                    # Keep Slack notification
                     report_security_issue(scan_result, pr_url)
+                    
+                    # ADD THIS: Send the email to your specific person
+                    from app.email_client import send_security_email
+                    send_security_email(recipient_email, scan_result)
+                    logger.info(f"✅ Email notification sent to {recipient_email}")
                 except Exception as e:
-                    logger.error(f"⚠️ [Background] Failed to send Slack notification: {e}")
-            
-            logger.info(f"✅ [Background] Successfully processed PR #{pr_number}")
+                    logger.error(f"⚠️ [Background] Failed to send notifications: {e}")
+                    logger.info(f"✅ [Background] Successfully processed PR #{pr_number}")
         finally:
             db.close()
     except Exception as e:

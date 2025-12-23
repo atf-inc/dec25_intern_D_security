@@ -44,13 +44,20 @@ app = FastAPI(
 )
 
 # Configure CORS for frontend
+# Build list of allowed origins dynamically
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:8000",
+]
+
+# Add frontend URL from config if set
+if config.frontend_url and config.frontend_url not in cors_origins:
+    cors_origins.append(config.frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        config.frontend_url,
-        "http://localhost:3000",
-        "https://*.run.app",  # Cloud Run URLs
-    ],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.run\.app",  # Allow all Cloud Run URLs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

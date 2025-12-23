@@ -41,7 +41,7 @@ deploy_backend() {
         --allow-unauthenticated \
         --add-cloudsql-instances ${CLOUD_SQL_INSTANCE} \
         --set-env-vars "GCP_PROJECT_ID=${PROJECT_ID},CLOUD_SQL_CONNECTION_NAME=${CLOUD_SQL_INSTANCE},DB_USER=postgres,DB_NAME=atf_sentinel" \
-        --set-secrets "GITHUB_TOKEN=github-token:latest,WEBHOOK_SECRET=webhook-secret:latest,GEMINI_API_KEY=gemini-api-key:latest,DB_PASS=db-password:latest" \
+        --set-secrets "GITHUB_TOKEN=github-token:latest,WEBHOOK_SECRET=webhook-secret:latest,GEMINI_API_KEY=gemini-api-key:latest,DB_PASS=db-password:latest,SENDGRID_API_KEY=sendgrid-api-key:latest,FROM_EMAIL=from-email:latest,SECURITY_ADMIN_EMAIL=security-admin-email:latest,SLACK_WEBHOOK_URL=slack-webhook-url:latest" \
         --memory 512Mi \
         --cpu 1 \
         --min-instances 0 \

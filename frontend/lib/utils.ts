@@ -153,13 +153,26 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 
 /**
  * API fetch wrapper with error handling
+ * For /api/* paths, uses relative URLs (goes to Next.js API routes which proxy to backend)
+ * For external URLs, uses them directly
  */
 export async function fetchAPI<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-  const url = endpoint.startsWith("http") ? endpoint : `${baseUrl}${endpoint}`;
+  // For /api/* paths, use relative URL to go through Next.js API routes
+  // The API routes handle proxying to the backend using BACKEND_API_URL
+  let url: string;
+  if (endpoint.startsWith("http")) {
+    url = endpoint;
+  } else if (endpoint.startsWith("/api/")) {
+    // Relative URL - goes to Next.js API routes
+    url = endpoint;
+  } else {
+    // For non-/api/ paths, try to use NEXT_PUBLIC_API_URL or fallback
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+    url = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
+  }
   
   const response = await fetch(url, {
     ...options,

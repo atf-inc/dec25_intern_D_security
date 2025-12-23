@@ -1,5 +1,6 @@
 # app/reporter.py
 
+import os
 import logging
 from datetime import datetime, timezone, timedelta
 from app.slack_client import send_slack_alert
@@ -7,7 +8,10 @@ from app.email_client import send_security_email
 
 logger = logging.getLogger(__name__)
 
-def report_security_issue(scan_result: dict, pr_url: str = None):
+# Security admin email - receives all security alerts
+SECURITY_ADMIN_EMAIL = os.getenv("SECURITY_ADMIN_EMAIL", "vanshikhashri@gmail.com")
+
+def report_security_issue(scan_result: dict, pr_url: str | None = None):
     """
     Formats scan results and sends a Slack alert.
     
@@ -71,13 +75,19 @@ def report_security_issue(scan_result: dict, pr_url: str = None):
 
         success = send_slack_alert(alert_data)
 
-        if action == "BLOCK":
-            recipient = scan_result.get("author_email")
-            if recipient:
-                logger.info(f"📧 Triggering email alert for {recipient}")
-                send_security_email(recipient, scan_result)
-            else:
-                logger.warning("⚠️ No author email found; skipping email.")
+        # Send email alerts for BLOCK and WARN actions
+        if action in ["BLOCK", "WARN"]:
+            # Always send to security admin
+            if SECURITY_ADMIN_EMAIL:
+                logger.info(f"📧 Sending email alert to security admin: {SECURITY_ADMIN_EMAIL}")
+                send_security_email(SECURITY_ADMIN_EMAIL, scan_result)
+            
+            # Also send to PR author if they have a valid email (not GitHub noreply)
+            author_email = scan_result.get("author_email")
+            if author_email and "noreply" not in author_email.lower():
+                if author_email != SECURITY_ADMIN_EMAIL:  # Avoid duplicate
+                    logger.info(f"📧 Sending email alert to author: {author_email}")
+                    send_security_email(author_email, scan_result)
 
         return success
 

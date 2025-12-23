@@ -34,7 +34,6 @@ if not FROM_EMAIL and config:
         FROM_EMAIL = config.get_secret('from-email')
     except Exception as e:
         logger.warning(f"Failed to load FROM_EMAIL from Secret Manager: {e}")
-        logger.info("💡 Tip: Set FROM_EMAIL environment variable for local testing")
 
 
 def send_security_email(recipient: str, alert_data: dict) -> bool:
@@ -51,13 +50,17 @@ def send_security_email(recipient: str, alert_data: dict) -> bool:
     if not SENDGRID_API_KEY or not FROM_EMAIL:
         logger.error("❌ SendGrid not configured (missing API key or FROM_EMAIL)")
         return False
-    pr_url = alert_data.get('pr_url', '#')
-    if not pr_url.startswith(('http://', 'https://')):
+    # --- Sanitization & Validation ---
+    # Validate and escape the URL to prevent href injection
+    raw_pr_url = alert_data.get('pr_url', '#')
+    if not str(raw_pr_url).startswith(('http://', 'https://')):
         pr_url = '#'
+    else:
+        pr_url = html.escape(str(raw_pr_url))
 
+    # Escape all text fields
     severity = html.escape(str(alert_data.get('severity', 'high')).lower())
     action = html.escape(str(alert_data.get('action', 'REVIEW')).upper())
-    issues_count = alert_data.get('issues_count', 0)
     repo = html.escape(str(alert_data.get('repo', 'Unknown Repository')))
     branch = html.escape(str(alert_data.get('branch', 'Unknown Branch')))
     author = html.escape(str(alert_data.get('author', 'Unknown Author')))
@@ -69,6 +72,7 @@ def send_security_email(recipient: str, alert_data: dict) -> bool:
     fix = html.escape(str(alert_data.get('fix', 'Refer to security guidelines.')))
     diff = html.escape(str(alert_data.get('diff', 'N/A')))
     issues_summary = html.escape(str(alert_data.get('issues_summary', '')))
+    issues_count = alert_data.get('issues_count', 0)
 
     # Truncate content (using escaped strings)
     if len(fix) > 1000: fix = fix[:997] + "..."
@@ -434,8 +438,8 @@ def send_simple_email_notification(recipient: str, message: str, severity: str =
         bool: True if sent successfully, False otherwise
     """
     if not SENDGRID_API_KEY or not FROM_EMAIL:
-        logger.error("❌ SendGrid not configured")
         return False
+    safe_message = html.escape(message)
     
     emoji_map = {
         "info": "ℹ️",
@@ -454,11 +458,9 @@ def send_simple_email_notification(recipient: str, message: str, severity: str =
     <body style="font-family: Arial, sans-serif;">
         <div style="padding: 20px; background-color: #f5f5f5; border-radius: 8px;">
             <h3>{emoji} ATF Sentinel Notification</h3>
-            <p>{message}</p>
+            <p>{safe_message}</p>
             <hr>
-            <p style="font-size: 12px; color: #777;">
-                🤖 Automated by ATF Sentinel
-            </p>
+            <p style="font-size: 12px; color: #777;">🤖 Automated by ATF Sentinel</p>
         </div>
     </body>
     </html>
@@ -467,15 +469,13 @@ def send_simple_email_notification(recipient: str, message: str, severity: str =
     mail = Mail(
         from_email=FROM_EMAIL,
         to_emails=recipient,
-        subject=subject,
-        plain_text_content=text_content,
+        subject=f"{emoji} ATF Sentinel Notification",
         html_content=html_content
     )
     
     try:
         sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(mail)
-        logger.info(f"✅ Email notification sent to {recipient}")
+        sg.send(mail)
         return True
     except Exception as e:
         logger.error(f"❌ Failed to send email notification: {e}")

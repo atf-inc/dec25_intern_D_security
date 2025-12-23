@@ -88,7 +88,7 @@ def report_security_issue(scan_result: dict, pr_url: str | None = None):
             if author_email and "noreply" not in author_email.lower():
                 if author_email != SECURITY_ADMIN_EMAIL:  # Avoid duplicate
                     logger.info(f"📧 Sending email alert to author: {author_email}")
-                    send_security_email(author_email, scan_result)
+                    send_security_email(author_email, alert_data)
 
         return success
 

@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 import { 
-  ChevronUp, 
-  ChevronDown, 
-  ExternalLink,
-  GitBranch
+  ChevronUp, ChevronDown, 
+  GitBranch, ExternalLink, ShieldCheck, AlertOctagon
 } from "lucide-react";
-import { formatNumber, formatPercent, formatRelativeTime, getActionColor } from "@/lib/utils";
+import { formatNumber, formatPercent, formatRelativeTime } from "@/lib/utils";
 import type { Repository } from "@/types";
 
 interface RepoTableProps {
@@ -15,21 +13,15 @@ interface RepoTableProps {
 }
 
 type SortKey = "name" | "total_scans" | "total_issues" | "blocked_prs" | "pass_rate" | "last_scan_at";
-type SortOrder = "asc" | "desc";
 
 export default function RepoTable({ data }: RepoTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("total_scans");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const sortedData = [...data].sort((a, b) => {
-    let aVal = a[sortKey];
-    let bVal = b[sortKey];
+    let aVal = a[sortKey] ?? (sortOrder === "asc" ? Infinity : -Infinity);
+    let bVal = b[sortKey] ?? (sortOrder === "asc" ? Infinity : -Infinity);
 
-    // Handle null values
-    if (aVal === null) aVal = sortOrder === "asc" ? Infinity : -Infinity;
-    if (bVal === null) bVal = sortOrder === "asc" ? Infinity : -Infinity;
-
-    // Handle dates
     if (sortKey === "last_scan_at") {
       aVal = aVal ? new Date(aVal as string).getTime() : 0;
       bVal = bVal ? new Date(bVal as string).getTime() : 0;
@@ -41,161 +33,80 @@ export default function RepoTable({ data }: RepoTableProps) {
   });
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortOrder("desc");
-    }
+    if (sortKey === key) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortOrder("desc"); }
   };
 
-  const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
-    if (sortKey !== columnKey) {
-      return <ChevronUp className="w-4 h-4 opacity-0 group-hover:opacity-30" />;
-    }
-    return sortOrder === "asc" ? (
-      <ChevronUp className="w-4 h-4" />
-    ) : (
-      <ChevronDown className="w-4 h-4" />
-    );
-  };
+  const SortHeader = ({ label, keyName }: { label: string, keyName: SortKey }) => (
+    <th 
+      className="px-6 py-4 text-left text-xs font-mono text-white/40 uppercase tracking-widest cursor-pointer hover:text-accent-cyan transition-colors"
+      onClick={() => handleSort(keyName)}
+    >
+      <div className="flex items-center gap-2">
+        {label}
+        {sortKey === keyName && (
+          sortOrder === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+        )}
+      </div>
+    </th>
+  );
 
   if (!data || data.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500">
-        No repositories found
+      <div className="py-20 text-center text-white/20 font-mono text-sm border border-dashed border-white/10 rounded-lg">
+        [NO REPOSITORY DATA DETECTED]
       </div>
     );
   }
 
   return (
-    <div className="table-container">
-      <table className="table">
-        <thead>
+    <div className="overflow-x-auto rounded-lg border border-white/5">
+      <table className="w-full">
+        <thead className="bg-white/5 border-b border-white/10">
           <tr>
-            <th
-              className="cursor-pointer group"
-              onClick={() => handleSort("name")}
-            >
-              <div className="flex items-center gap-1">
-                Repository
-                <SortIcon columnKey="name" />
-              </div>
-            </th>
-            <th
-              className="cursor-pointer group"
-              onClick={() => handleSort("total_scans")}
-            >
-              <div className="flex items-center gap-1">
-                Scans
-                <SortIcon columnKey="total_scans" />
-              </div>
-            </th>
-            <th
-              className="cursor-pointer group"
-              onClick={() => handleSort("pass_rate")}
-            >
-              <div className="flex items-center gap-1">
-                Pass Rate
-                <SortIcon columnKey="pass_rate" />
-              </div>
-            </th>
-            <th
-              className="cursor-pointer group"
-              onClick={() => handleSort("total_issues")}
-            >
-              <div className="flex items-center gap-1">
-                Issues
-                <SortIcon columnKey="total_issues" />
-              </div>
-            </th>
-            <th
-              className="cursor-pointer group"
-              onClick={() => handleSort("blocked_prs")}
-            >
-              <div className="flex items-center gap-1">
-                Blocked
-                <SortIcon columnKey="blocked_prs" />
-              </div>
-            </th>
-            <th
-              className="cursor-pointer group"
-              onClick={() => handleSort("last_scan_at")}
-            >
-              <div className="flex items-center gap-1">
-                Last Scan
-                <SortIcon columnKey="last_scan_at" />
-              </div>
-            </th>
-            <th>Status</th>
+            <SortHeader label="Target" keyName="name" />
+            <SortHeader label="Scans" keyName="total_scans" />
+            <SortHeader label="Health" keyName="pass_rate" />
+            <SortHeader label="Threats" keyName="total_issues" />
+            <SortHeader label="Blocks" keyName="blocked_prs" />
+            <SortHeader label="Last Sync" keyName="last_scan_at" />
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-white/5">
           {sortedData.map((repo) => (
-            <tr key={repo.id}>
-              <td>
-                <div className="flex items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-slate-400" />
+            <tr key={repo.id} className="hover:bg-white/5 transition-colors group">
+              <td className="px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded bg-white/5 text-white/60 group-hover:text-accent-cyan transition-colors">
+                    <GitBranch size={16} />
+                  </div>
                   <div>
-                    <a
-                      href={`https://github.com/${repo.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-slate-900 dark:text-slate-100 hover:text-green-600 
-                                 dark:hover:text-green-400 flex items-center gap-1"
-                    >
-                      {repo.name}
-                      <ExternalLink className="w-3 h-3" />
+                    <a href={`https://github.com/${repo.id}`} target="_blank" className="font-medium text-white hover:text-accent-cyan flex items-center gap-2">
+                      {repo.name} <ExternalLink size={10} className="opacity-50" />
                     </a>
-                    <p className="text-xs text-slate-500">{repo.organization}</p>
+                    <div className="text-[10px] text-white/30 font-mono">{repo.organization}</div>
                   </div>
                 </div>
               </td>
-              <td className="font-medium">{formatNumber(repo.total_scans)}</td>
-              <td>
-                <span
-                  className={`font-medium ${
-                    repo.pass_rate >= 90
-                      ? "text-green-600"
-                      : repo.pass_rate >= 70
-                      ? "text-yellow-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {formatPercent(repo.pass_rate)}
-                </span>
-              </td>
-              <td>
-                {repo.total_issues > 0 ? (
-                  <span className="text-red-600 font-medium">
-                    {formatNumber(repo.total_issues)}
+              <td className="px-6 py-4 font-mono text-sm text-white/80">{formatNumber(repo.total_scans)}</td>
+              <td className="px-6 py-4">
+                <div className="flex items-center gap-2">
+                  {repo.pass_rate >= 90 ? <ShieldCheck size={14} className="text-green-500" /> : <AlertOctagon size={14} className="text-accent-crimson" />}
+                  <span className={`font-mono text-sm ${repo.pass_rate >= 90 ? 'text-green-400' : 'text-accent-crimson'}`}>
+                    {formatPercent(repo.pass_rate)}
                   </span>
-                ) : (
-                  <span className="text-slate-400">0</span>
-                )}
+                </div>
               </td>
-              <td>
+              <td className="px-6 py-4 font-mono text-sm text-white/60">{formatNumber(repo.total_issues)}</td>
+              <td className="px-6 py-4">
                 {repo.blocked_prs > 0 ? (
-                  <span className={`badge ${getActionColor("BLOCK")}`}>
+                  <span className="px-2 py-1 rounded bg-accent-crimson/10 text-accent-crimson text-xs font-bold border border-accent-crimson/20">
                     {repo.blocked_prs}
                   </span>
-                ) : (
-                  <span className="text-slate-400">0</span>
-                )}
+                ) : <span className="text-white/20">-</span>}
               </td>
-              <td className="text-slate-500 text-sm">
-                {repo.last_scan_at
-                  ? formatRelativeTime(repo.last_scan_at)
-                  : "Never"}
-              </td>
-              <td>
-                {repo.is_active ? (
-                  <span className="badge-success">Active</span>
-                ) : (
-                  <span className="badge bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    Inactive
-                  </span>
-                )}
+              <td className="px-6 py-4 text-xs font-mono text-white/40">
+                {repo.last_scan_at ? formatRelativeTime(repo.last_scan_at) : "PENDING"}
               </td>
             </tr>
           ))}
@@ -204,4 +115,3 @@ export default function RepoTable({ data }: RepoTableProps) {
     </div>
   );
 }
-

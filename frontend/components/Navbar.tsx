@@ -3,141 +3,66 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  BarChart3,
-  LineChart,
-  Trophy,
-  FlaskConical,
-  MessageSquare,
-  Shield,
-  ExternalLink,
-  Github,
-} from "lucide-react";
+  SquaresFour, ChartBar, TrendUp, Trophy,
+  Flask, ChatCircleText, ShieldCheck, SignOut
+} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Analytics",
-    href: "/analytics",
-    icon: BarChart3,
-  },
-  {
-    title: "Metrics",
-    href: "/metrics",
-    icon: LineChart,
-  },
-  {
-    title: "Champions",
-    href: "/champions",
-    icon: Trophy,
-  },
-  {
-    title: "Test Generator",
-    href: "/tests",
-    icon: FlaskConical,
-  },
-  {
-    title: "Security Chat",
-    href: "/chat",
-    icon: MessageSquare,
-  },
+  { title: "Command Center", href: "/dashboard", icon: SquaresFour },
+  { title: "Intelligence Grid", href: "/analytics", icon: ChartBar },
+  { title: "Neural Trends", href: "/metrics", icon: TrendUp },
+  { title: "Elite Champions", href: "/champions", icon: Trophy },
+  { title: "Security Lab", href: "/tests", icon: Flask },
+  { title: "Security Oracle", href: "/chat", icon: ChatCircleText },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
-      <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-6 dark:border-slate-800">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-emerald-600">
-            <Shield className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-slate-900 dark:text-white">
-              ATF Sentinel
-            </h1>
-            <p className="text-xs text-slate-500">Security Dashboard</p>
-          </div>
+    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-bg-surface border-r border-white/5 flex flex-col">
+      <div className="h-24 flex items-center gap-3 px-6 border-b border-white/5">
+        <div className="w-10 h-10 bg-white text-black rounded flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+          <ShieldCheck weight="fill" size={24} />
         </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-4">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-                )}
-              >
-                <Icon className={cn(
-                  "h-5 w-5",
-                  isActive ? "text-green-600 dark:text-green-400" : ""
-                )} />
-                {item.title}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="border-t border-slate-200 p-4 dark:border-slate-800">
-          {/* API Status */}
-          <div className="mb-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-500">API Status</span>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-xs text-green-600 dark:text-green-400">
-                  Online
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* External Links */}
-          <div className="space-y-2">
-            <a
-              href="/docs"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-            >
-              <ExternalLink className="h-4 w-4" />
-              API Docs
-            </a>
-            <a
-              href="https://github.com/atf-inc/atf-sentinel"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-            >
-              <Github className="h-4 w-4" />
-              GitHub
-            </a>
-          </div>
-
-          {/* Version */}
-          <div className="mt-4 text-center text-xs text-slate-400">
-            v2.0.0 • © 2025 ATF Inc.
-          </div>
+        <div>
+          <h1 className="font-bold text-white text-xs tracking-[0.2em]">ATF SENTINEL</h1>
+          <p className="text-[9px] text-accent-cyan font-mono animate-pulse">SYSTEM_ONLINE</p>
         </div>
+      </div>
+
+      <nav className="flex-1 py-6 px-4 space-y-2">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group",
+                isActive
+                  ? "bg-white/10 text-white shadow-neumorph border border-white/10"
+                  : "text-white/40 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <item.icon size={20} weight={isActive ? "fill" : "light"} className={isActive ? "text-accent-cyan" : ""} />
+              <span>{item.title}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="p-6 border-t border-white/5">
+        <div className="text-[10px] font-mono text-white/20 mb-2 uppercase">System_Status</div>
+        <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden mb-6">
+          <div className="h-full bg-accent-emerald w-full" />
+        </div>
+        <Link href="/" className="flex items-center gap-3 w-full px-4 py-2 rounded-xl text-white/30 hover:text-accent-crimson transition-all text-xs font-mono">
+          <SignOut size={18} />
+          <span>EXIT_CONSOLE</span>
+        </Link>
       </div>
     </aside>
   );
 }
-

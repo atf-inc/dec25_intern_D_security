@@ -1,290 +1,97 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
-import { 
-  Trophy, 
-  Medal,
-  Star,
-  Shield,
-  TrendingUp,
-  CheckCircle
-} from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { fetchAPI, formatNumber, formatPercent, getBadgeColor } from "@/lib/utils";
-import type { ChampionsResponse, Champion } from "@/types";
+import { ShieldCheck, Crown, Medal, Trophy } from "@phosphor-icons/react";
+import { Card } from "@/components/ui/card";
+import { fetchAPI, cn } from "@/lib/utils";
+import type { ChampionsResponse } from "@/types";
 
 export default function ChampionsPage() {
-  const [champions, setChampions] = useState<ChampionsResponse | null>(null);
+  const [data, setData] = useState<ChampionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchChampions() {
-      try {
-        const data = await fetchAPI<ChampionsResponse>("/api/champions?limit=20");
-        setChampions(data);
-      } catch (error) {
-        console.error("Failed to fetch champions:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    
-    fetchChampions();
+    fetchAPI<ChampionsResponse>("/api/champions?limit=20")
+      .then(setData)
+      .catch(err => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return <ChampionsSkeleton />;
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="font-mono text-accent-cyan animate-pulse text-center uppercase tracking-widest">
+        Reconstructing_Leaderboard...
+      </div>
+    </div>
+  );
 
-  const topThree = champions?.champions.slice(0, 3) || [];
-  const restOfChampions = champions?.champions.slice(3) || [];
+  const champions = data?.champions || [];
 
   return (
-    <div className="space-y-8 animate-in">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-          <Trophy className="w-8 h-8 text-yellow-500" />
-          Security Champions
-        </h1>
-        <p className="text-slate-500 mt-1">
-          Top engineers with the best security practices
-        </p>
+    <div className="space-y-12 animate-in fade-in duration-700">
+      <div className="text-center space-y-4">
+        <h2 className="text-[10px] font-mono text-accent-cyan tracking-[0.5em] uppercase">Elite Operatives</h2>
+        <h1 className="text-5xl font-light tracking-tighter uppercase">Security Champions</h1>
       </div>
 
-      {/* Top 3 Podium */}
-      {topThree.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Second Place */}
-          {topThree[1] && (
-            <div className="md:order-1 md:mt-8">
-              <ChampionCard champion={topThree[1]} featured />
-            </div>
-          )}
-          
-          {/* First Place */}
-          {topThree[0] && (
-            <div className="md:order-2">
-              <ChampionCard champion={topThree[0]} featured isFirst />
-            </div>
-          )}
-          
-          {/* Third Place */}
-          {topThree[2] && (
-            <div className="md:order-3 md:mt-12">
-              <ChampionCard champion={topThree[2]} featured />
-            </div>
-          )}
+      {champions.length === 0 ? (
+        <div className="text-center py-20">
+          <Trophy size={64} className="mx-auto text-white/10 mb-6" />
+          <h3 className="text-xl font-light text-white/40 mb-2">No Champions Yet</h3>
+          <p className="text-white/20 font-mono text-xs">Engineers need at least 1 PR scanned to appear here</p>
         </div>
-      )}
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto items-end">
+            {champions.slice(0, 3).map((c, i) => {
+              const orderClass = i === 0 ? "md:order-2 scale-110 z-10" : i === 1 ? "md:order-1" : "md:order-3";
+              const icon = i === 0 ? <Crown size={48} weight="fill" className="text-yellow-500" /> : 
+                           i === 1 ? <Medal size={48} weight="fill" className="text-slate-400" /> : 
+                                     <Trophy size={48} weight="fill" className="text-orange-600" />;
+              
+              return (
+                <div key={c.id} className={cn("relative group w-full", orderClass)}>
+                  <Card className={cn(
+                    "bg-bg-surface border-white/10 overflow-hidden text-center p-8 transition-all duration-500 hover:border-white/20", 
+                    i === 0 && "border-accent-cyan shadow-[0_0_40px_rgba(0,240,255,0.1)]"
+                  )}>
+                    <div className="flex justify-center mb-6">{icon}</div>
+                    <h3 className="text-xl font-medium mb-1 text-white">{c.display_name}</h3>
+                    <p className="text-accent-cyan font-mono text-[10px] mb-4 uppercase tracking-widest">
+                      Rating: {c.security_score.toFixed(1)}
+                    </p>
+                    <div className="h-0.5 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-full bg-accent-cyan transition-all duration-1000" style={{ width: `${c.clean_rate}%` }} />
+                    </div>
+                  </Card>
+                </div>
+              );
+            })}
+          </div>
 
-      {/* Rest of the Leaderboard */}
-      {restOfChampions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Medal className="w-5 h-5 text-blue-500" />
-              Leaderboard
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {restOfChampions.map((champion) => (
-                <ChampionRow key={champion.id} champion={champion} />
+          {champions.length > 3 && (
+            <div className="max-w-4xl mx-auto space-y-2">
+              {champions.slice(3).map((c, i) => (
+                <div key={c.id} className="flex items-center justify-between p-6 bg-white/5 rounded-xl border border-white/5 hover:border-white/20 transition-all group">
+                  <div className="flex items-center gap-6">
+                    <span className="font-mono text-white/20">#{i + 4}</span>
+                    <span className="text-lg font-light text-white/80 group-hover:text-white transition-colors">
+                      {c.display_name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-12">
+                    <div className="text-right">
+                      <div className="text-[9px] text-white/30 font-mono uppercase">Compliance</div>
+                      <div className="text-accent-emerald font-mono text-sm">{c.clean_rate}%</div>
+                    </div>
+                    <ShieldCheck size={32} weight="thin" className="text-white/10 group-hover:text-accent-cyan transition-colors" />
+                  </div>
+                </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Empty State */}
-      {(!champions?.champions || champions.champions.length === 0) && (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Trophy className="w-16 h-16 mx-auto text-slate-300 mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Champions Yet</h3>
-            <p className="text-slate-500">
-              Engineers need at least 5 PRs to qualify for the leaderboard
-            </p>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function ChampionCard({ 
-  champion, 
-  featured = false,
-  isFirst = false 
-}: { 
-  champion: Champion; 
-  featured?: boolean;
-  isFirst?: boolean;
-}) {
-  const badgeIcon = {
-    platinum: <Star className="w-5 h-5" />,
-    gold: <Trophy className="w-5 h-5" />,
-    silver: <Medal className="w-5 h-5" />,
-    bronze: <Shield className="w-5 h-5" />,
-    none: null,
-  }[champion.badge];
-
-  return (
-    <Card className={`relative overflow-hidden ${
-      isFirst ? 'ring-2 ring-yellow-400 shadow-lg' : ''
-    }`}>
-      {/* Badge ribbon */}
-      {champion.badge !== 'none' && (
-        <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-bold 
-          bg-gradient-to-r ${getBadgeColor(champion.badge)} flex items-center gap-1`}>
-          {badgeIcon}
-          {champion.badge.toUpperCase()}
-        </div>
-      )}
-      
-      <CardContent className="p-6 text-center">
-        {/* Rank */}
-        <div className={`
-          w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center text-xl font-bold
-          ${champion.rank === 1 ? 'bg-yellow-100 text-yellow-700 ring-4 ring-yellow-200' :
-            champion.rank === 2 ? 'bg-slate-200 text-slate-700 ring-4 ring-slate-100' :
-            champion.rank === 3 ? 'bg-orange-100 text-orange-700 ring-4 ring-orange-100' :
-            'bg-slate-100 text-slate-600'}
-        `}>
-          #{champion.rank}
-        </div>
-        
-        {/* Avatar */}
-        <div className="relative w-20 h-20 mx-auto mb-4">
-          {champion.avatar_url ? (
-            <Image
-              src={champion.avatar_url}
-              alt={champion.display_name}
-              fill
-              className="rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-              <span className="text-2xl font-bold text-slate-400">
-                {champion.display_name.charAt(0).toUpperCase()}
-              </span>
-            </div>
           )}
-        </div>
-        
-        {/* Name */}
-        <h3 className="text-lg font-semibold mb-1">{champion.display_name}</h3>
-        
-        {/* Score */}
-        <div className="flex items-center justify-center gap-1 text-green-600 dark:text-green-400 mb-4">
-          <TrendingUp className="w-4 h-4" />
-          <span className="text-2xl font-bold">{champion.security_score.toFixed(1)}</span>
-        </div>
-        
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-slate-500">Clean Rate</p>
-            <p className="font-semibold text-green-600">{formatPercent(champion.clean_rate)}</p>
-          </div>
-          <div>
-            <p className="text-slate-500">Total PRs</p>
-            <p className="font-semibold">{formatNumber(champion.total_prs)}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChampionRow({ champion }: { champion: Champion }) {
-  return (
-    <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-      {/* Rank */}
-      <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-slate-600 dark:text-slate-400">
-        #{champion.rank}
-      </div>
-      
-      {/* Avatar & Name */}
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        {champion.avatar_url ? (
-          <Image
-            src={champion.avatar_url}
-            alt={champion.display_name}
-            width={40}
-            height={40}
-            className="rounded-full"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center">
-            <span className="font-bold text-slate-500">
-              {champion.display_name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-        )}
-        <div className="min-w-0">
-          <p className="font-medium truncate">{champion.display_name}</p>
-          <p className="text-xs text-slate-500">@{champion.id}</p>
-        </div>
-      </div>
-      
-      {/* Badge */}
-      {champion.badge !== 'none' && (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getBadgeColor(champion.badge)}`}>
-          {champion.badge}
-        </span>
+        </>
       )}
-      
-      {/* Stats */}
-      <div className="hidden md:flex items-center gap-6 text-sm">
-        <div className="text-center">
-          <p className="text-slate-500 text-xs">Score</p>
-          <p className="font-semibold text-green-600">{champion.security_score.toFixed(1)}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-slate-500 text-xs">Clean</p>
-          <p className="font-semibold">{formatPercent(champion.clean_rate)}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-slate-500 text-xs">PRs</p>
-          <p className="font-semibold">{champion.total_prs}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-slate-500 text-xs">Fixed</p>
-          <p className="font-semibold flex items-center gap-1">
-            <CheckCircle className="w-3 h-3 text-green-500" />
-            {champion.issues_fixed}
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
-
-function ChampionsSkeleton() {
-  return (
-    <div className="space-y-8">
-      <div className="space-y-2">
-        <div className="h-8 w-64 skeleton rounded" />
-        <div className="h-4 w-80 skeleton rounded" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="card p-6">
-            <div className="h-48 skeleton rounded" />
-          </div>
-        ))}
-      </div>
-      <div className="card p-6">
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 skeleton rounded" />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-

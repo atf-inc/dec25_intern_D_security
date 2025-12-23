@@ -1,242 +1,83 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  FlaskConical, 
-  Play, 
-  Copy,
-  Check,
-  Code,
-  Loader2
-} from "lucide-react";
+import { Flask, Terminal, Code, Cpu } from "@phosphor-icons/react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-
-const LANGUAGES = [
-  { value: "python", label: "Python" },
-  { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
-  { value: "java", label: "Java" },
-  { value: "go", label: "Go" },
-  { value: "rust", label: "Rust" },
-];
-
-const EXAMPLE_CODE = `# Example: User authentication function
-def authenticate_user(username, password):
-    # TODO: Add input validation
-    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
-    result = db.execute(query)
-    
-    if result:
-        token = generate_token(username)
-        return {"token": token, "user": result}
-    return None`;
+import { Button } from "@/components/ui/button";
 
 export default function TestsPage() {
-  const [code, setCode] = useState(EXAMPLE_CODE);
-  const [language, setLanguage] = useState("python");
-  const [generatedTests, setGeneratedTests] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
 
-  async function handleGenerateTests() {
-    if (!code.trim()) {
-      setError("Please enter some code to analyze");
-      return;
-    }
-
+  async function generate() {
+    if (!code) return;
     setLoading(true);
-    setError(null);
-    setGeneratedTests(null);
-
     try {
-      const response = await fetch("/api/tests/generate", {
+      const res = await fetch("/api/tests/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, language }),
+        body: JSON.stringify({ code, language: "python" }),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to generate tests");
-      }
-
-      const data = await response.json();
-      setGeneratedTests(data.tests);
+      const data = await res.json();
+      setResult(data.tests);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCopyTests() {
-    if (!generatedTests) return;
-    
-    await navigator.clipboard.writeText(generatedTests);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+        console.error(err);
+    } finally { setLoading(false); }
   }
 
   return (
-    <div className="space-y-8 animate-in">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-          <FlaskConical className="w-8 h-8 text-purple-500" />
-          Security Test Generator
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="border-b border-white/5 pb-6">
+        <h1 className="text-3xl font-light text-white flex items-center gap-3 uppercase tracking-tighter">
+          <Flask className="text-accent-cyan" size={32} /> Security Lab
         </h1>
-        <p className="text-slate-500 mt-1">
-          Generate security test cases for your code using AI
-        </p>
+        <p className="text-white/40 font-mono text-[10px] tracking-widest mt-1 uppercase">AI_VULNERABILITY_SYNTHESIS_ENGINE</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Input Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Code className="w-5 h-5 text-blue-500" />
-                Your Code
-              </span>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="text-sm px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
-              >
-                {LANGUAGES.map((lang) => (
-                  <option key={lang.value} value={lang.value}>
-                    {lang.label}
-                  </option>
-                ))}
-              </select>
+        <Card className="bg-black/60 border-white/10 shadow-2xl">
+          <CardHeader className="border-b border-white/5">
+            <CardTitle className="text-[10px] font-mono flex items-center gap-2 text-white/40 uppercase tracking-widest">
+              <Terminal size={14} /> SOURCE_BUFFER
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <textarea
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="Paste your code here..."
-              className="w-full h-[400px] p-4 font-mono text-sm bg-slate-900 text-slate-100 rounded-lg 
-                         border border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500
-                         resize-none"
+              className="w-full h-[500px] bg-transparent p-6 font-mono text-sm text-accent-cyan outline-none resize-none placeholder:opacity-10"
+              placeholder="// Input sensitive logic for deep-scan analysis..."
             />
-            
-            {error && (
-              <div className="mt-4 p-3 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm">
-                {error}
-              </div>
-            )}
-            
-            <button
-              onClick={handleGenerateTests}
-              disabled={loading || !code.trim()}
-              className="mt-4 w-full btn-primary flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating Tests...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  Generate Security Tests
-                </>
-              )}
-            </button>
+            <div className="p-4 border-t border-white/5 bg-black/40">
+                <Button onClick={generate} loading={loading} className="w-full bg-accent-cyan text-black hover:bg-white transition-all font-mono text-[10px] font-bold py-6 rounded-xl uppercase tracking-widest">
+                   <Cpu size={18} className="mr-2" /> EXECUTE_VULN_SYNTHESIS
+                </Button>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Output Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <FlaskConical className="w-5 h-5 text-purple-500" />
-                Generated Tests
-              </span>
-              {generatedTests && (
-                <button
-                  onClick={handleCopyTests}
-                  className="btn-ghost text-sm flex items-center gap-1"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 text-green-500" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copy
-                    </>
-                  )}
-                </button>
-              )}
+        <Card className="bg-black/60 border-white/10 shadow-2xl">
+          <CardHeader className="border-b border-white/5">
+            <CardTitle className="text-[10px] font-mono flex items-center gap-2 text-white/40 uppercase tracking-widest">
+              <Code size={14} /> ANALYSIS_REPORT
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-[400px] flex items-center justify-center">
-                <div className="text-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-purple-500 mx-auto mb-4" />
-                  <p className="text-slate-500">Analyzing code and generating tests...</p>
-                </div>
-              </div>
-            ) : generatedTests ? (
-              <pre className="w-full h-[400px] p-4 font-mono text-sm bg-slate-900 text-slate-100 
-                             rounded-lg overflow-auto whitespace-pre-wrap">
-                {generatedTests}
+          <CardContent className="p-6">
+            {result ? (
+              <pre className="text-xs font-mono text-white/70 whitespace-pre-wrap leading-relaxed overflow-y-auto h-[480px] custom-scrollbar">
+                {result}
               </pre>
             ) : (
-              <div className="h-[400px] flex items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
-                <div className="text-center text-slate-500">
-                  <FlaskConical className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Generated tests will appear here</p>
-                  <p className="text-sm mt-1">Enter code and click generate</p>
+              <div className="h-[480px] flex flex-col items-center justify-center text-white/10 font-mono text-[10px] italic">
+                <div className="w-16 h-16 border border-white/5 rounded-full flex items-center justify-center mb-4">
+                    <div className="w-3 h-3 bg-accent-cyan rounded-full animate-ping" />
                 </div>
+                AWAITING_SOURCE_SIGNAL...
               </div>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Info Section */}
-      <Card>
-        <CardContent className="p-6">
-          <h3 className="font-semibold mb-3">What this tool generates:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <InfoItem 
-              title="Input Validation Tests"
-              description="Tests for SQL injection, XSS, and malformed input"
-            />
-            <InfoItem 
-              title="Authentication Tests"
-              description="Tests for auth bypass and session handling"
-            />
-            <InfoItem 
-              title="Secret Detection Tests"
-              description="Tests for hardcoded credentials and API keys"
-            />
-            <InfoItem 
-              title="Edge Case Tests"
-              description="Boundary conditions and error handling"
-            />
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
-
-function InfoItem({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800">
-      <h4 className="font-medium mb-1">{title}</h4>
-      <p className="text-sm text-slate-500">{description}</p>
-    </div>
-  );
-}
-

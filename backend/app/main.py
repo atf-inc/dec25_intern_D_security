@@ -385,6 +385,7 @@ async def get_time_series_metrics(
     try:
         start_date = datetime.utcnow() - timedelta(days=days)
         
+        # First try DailyMetrics table
         query = db.query(DailyMetrics).filter(
             DailyMetrics.date >= start_date
         )
@@ -392,9 +393,76 @@ async def get_time_series_metrics(
         if repo_id:
             query = query.filter(DailyMetrics.repo_id == repo_id)
         else:
-            query = query.filter(DailyMetrics.repo_id == None)  # Global metrics
+            query = query.filter(DailyMetrics.repo_id == None)
         
         metrics = query.order_by(DailyMetrics.date).all()
+        
+        # If DailyMetrics is empty, compute from ScanResult directly
+        if not metrics:
+            logger.info("DailyMetrics empty, computing from ScanResult...")
+            
+            # Get all scans in the date range
+            scans_query = db.query(ScanResult).filter(
+                ScanResult.created_at >= start_date
+            )
+            if repo_id:
+                scans_query = scans_query.filter(ScanResult.repo_id == repo_id)
+            
+            scans = scans_query.all()
+            
+            # Group by date
+            from collections import defaultdict
+            daily_data = defaultdict(lambda: {
+                "total_scans": 0, "passed": 0, "warned": 0, "blocked": 0,
+                "critical_issues": 0, "high_issues": 0, "medium_issues": 0, "low_issues": 0
+            })
+            
+            for scan in scans:
+                date_key = scan.created_at.strftime("%Y-%m-%d")
+                daily_data[date_key]["total_scans"] += 1
+                
+                if scan.action == ScanAction.PASS:
+                    daily_data[date_key]["passed"] += 1
+                elif scan.action == ScanAction.WARN:
+                    daily_data[date_key]["warned"] += 1
+                elif scan.action == ScanAction.BLOCK:
+                    daily_data[date_key]["blocked"] += 1
+                
+                # Count issues by severity
+                for issue in scan.issues:
+                    if issue.severity == Severity.CRITICAL:
+                        daily_data[date_key]["critical_issues"] += 1
+                    elif issue.severity == Severity.HIGH:
+                        daily_data[date_key]["high_issues"] += 1
+                    elif issue.severity == Severity.MEDIUM:
+                        daily_data[date_key]["medium_issues"] += 1
+                    else:
+                        daily_data[date_key]["low_issues"] += 1
+            
+            # Convert to list and sort by date
+            data = []
+            for date_str in sorted(daily_data.keys()):
+                d = daily_data[date_str]
+                total = d["total_scans"] or 1
+                data.append({
+                    "date": date_str,
+                    "total_scans": d["total_scans"],
+                    "passed": d["passed"],
+                    "warned": d["warned"],
+                    "blocked": d["blocked"],
+                    "critical_issues": d["critical_issues"],
+                    "high_issues": d["high_issues"],
+                    "medium_issues": d["medium_issues"],
+                    "low_issues": d["low_issues"],
+                    "pass_rate": round((d["passed"] / total) * 100, 2),
+                    "block_rate": round((d["blocked"] / total) * 100, 2),
+                })
+            
+            return {
+                "period_days": days,
+                "repo_id": repo_id,
+                "data": data
+            }
         
         return {
             "period_days": days,
@@ -431,7 +499,7 @@ async def get_security_champions(
     """
     try:
         champions = db.query(Engineer).filter(
-            Engineer.total_prs >= 5  # Minimum 5 PRs to qualify
+            Engineer.total_prs >= 1  # Minimum 5 PRs to qualify
         ).order_by(
             desc(Engineer.security_score)  # type: ignore
         ).limit(limit).all()
@@ -624,11 +692,7 @@ def save_scan_result(
     org, name = repo_name.split('/', 1)
     repo = db.query(Repository).filter(Repository.id == repo_name).first()
     if not repo:
-        repo = Repository(
-            id=repo_name,
-            name=name,
-            organization=org,
-        )
+        repo = Repository(id=repo_name, name=name, organization=org)
         db.add(repo)
     
     # Ensure engineer exists
@@ -661,57 +725,41 @@ def save_scan_result(
     )
     db.add(scan)
     
-    # Save individual issues
+    # Update Daily Metrics (THIS FIXES THE CHARTS/HEATMAP)
+    today = datetime.utcnow().date()
+    metric_id = f"{today.isoformat()}-global"
+    daily_metric = db.query(DailyMetrics).filter(DailyMetrics.id == metric_id).first()
+    if not daily_metric:
+        daily_metric = DailyMetrics(id=metric_id, date=datetime.combine(today, datetime.min.time()))
+        db.add(daily_metric)
+
+    daily_metric.total_scans += 1
+    if action_str == 'PASS': daily_metric.passed_scans += 1
+    elif action_str == 'WARN': daily_metric.warned_scans += 1
+    elif action_str == 'BLOCK': daily_metric.blocked_scans += 1
+
+    # Update severity counts for metrics
     for issue_data in scan_result.get('issues', []):
-        issue = SecurityIssue(
-            id=str(uuid.uuid4()),
-            scan_id=scan_id,
-            file_path=issue_data.get('file', 'unknown'),
-            line_number=issue_data.get('line'),
-            pattern_name=issue_data.get('pattern', 'unknown'),
-            pattern_type=issue_data.get('type', 'regex'),
-            severity=Severity[issue_data.get('severity', 'medium').upper()],
-        )
-        db.add(issue)
+        sev = issue_data.get('severity', 'medium').lower()
+        if sev == 'critical': daily_metric.critical_issues += 1
+        elif sev == 'high': daily_metric.high_issues += 1
+        elif sev == 'medium': daily_metric.medium_issues += 1
+        elif sev == 'low': daily_metric.low_issues += 1
+
+    # Update repository and engineer stats
+    repo.total_scans += 1
+    repo.total_issues += len(scan_result.get('issues', []))
+    if action_str == 'BLOCK': repo.blocked_prs += 1
+    repo.last_scan_at = datetime.utcnow()
     
-    # Update repository stats - SQLAlchemy handles these assignments correctly
-    current_scans = repo.total_scans or 0
-    current_issues = repo.total_issues or 0
-    current_blocked = repo.blocked_prs or 0
-    
-    repo.total_scans = current_scans + 1  # type: ignore
-    repo.total_issues = current_issues + len(scan_result.get('issues', []))  # type: ignore
-    if action_str == 'BLOCK':
-        repo.blocked_prs = current_blocked + 1  # type: ignore
-    repo.last_scan_at = datetime.utcnow()  # type: ignore
-    
-    # Update engineer stats
-    current_total_prs = engineer.total_prs or 0
-    current_clean = engineer.clean_prs or 0
-    current_warned = engineer.warned_prs or 0
-    current_blocked_prs = engineer.blocked_prs or 0
-    current_issues_intro = engineer.total_issues_introduced or 0
-    
-    engineer.total_prs = current_total_prs + 1  # type: ignore
-    if action_str == 'PASS':
-        engineer.clean_prs = current_clean + 1  # type: ignore
-    elif action_str == 'WARN':
-        engineer.warned_prs = current_warned + 1  # type: ignore
-    elif action_str == 'BLOCK':
-        engineer.blocked_prs = current_blocked_prs + 1  # type: ignore
-    engineer.total_issues_introduced = current_issues_intro + len(scan_result.get('issues', []))  # type: ignore
+    engineer.total_prs += 1
+    if action_str == 'PASS': engineer.clean_prs += 1
+    elif action_str == 'BLOCK': engineer.blocked_prs += 1
+    engineer.total_issues_introduced += len(scan_result.get('issues', []))
     engineer.update_security_score()
     
-    try:
-        db.commit()
-        logger.debug(f"✅ Committed scan result for PR #{pr_number} in {repo_name}")
-    except Exception as e:
-        logger.error(f"❌ Failed to commit scan result: {e}", exc_info=True)
-        db.rollback()
-        raise
-    
+    db.commit()
     return scan
-
 
 async def process_pr_scan_background(
     repo_name: str,
